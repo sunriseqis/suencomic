@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  suencomic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: suencomic
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - PORT=8090
+      - TZ=Asia/Shanghai
+    volumes:
+      # 持久化漫画下载目录
+      - ./download:/app/download
+      # 持久化配置文件与订阅追踪
+      - ./config.json:/app/config.json
+      - ./tasks.json:/app/tasks.json
+      - ./subscriptions.json:/app/subscriptions.json

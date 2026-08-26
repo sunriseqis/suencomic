@@ -1,0 +1,30 @@
+# Binaries and executables
+suencomic
+manga-downloader
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and scratch files
+*.test
+*.out
+scratch/
+test_*.py
+
+# Dependency directories
+node_modules/
+web/node_modules/
+
+# Download and user data directories
+download/
+tasks.json
+config.json
+
+# OS and Editor metadata
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

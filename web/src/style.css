@@ -1,0 +1,220 @@
+:root {
+  --bh-red: #D02C24;
+  --bh-blue: #194A8D;
+  --bh-yellow: #FDB813;
+  --bh-black: #121212;
+  --bh-cream: #F5F2EB;
+  --bh-white: #FFFFFF;
+  --bh-gray: #E6E1D6;
+  --bh-dark-gray: #2B2B2B;
+  --bh-border: 2.5px solid var(--bh-black);
+  --bh-border-thin: 1.5px solid var(--bh-black);
+  --bh-shadow: 4px 4px 0px var(--bh-black);
+  --bh-shadow-sm: 2px 2px 0px var(--bh-black);
+  --bh-shadow-lg: 6px 6px 0px var(--bh-black);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bh-cream);
+  color: var(--bh-black);
+  font-family: 'Space Grotesk', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1, h2, h3, h4, .bauhaus-title {
+  font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Bauhaus Card */
+.bh-card {
+  background: var(--bh-white);
+  border: var(--bh-border);
+  box-shadow: var(--bh-shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bh-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--bh-shadow-lg);
+}
+
+/* Buttons */
+.bh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-family: 'Space Grotesk', 'Noto Sans SC', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  border: var(--bh-border);
+  box-shadow: var(--bh-shadow-sm);
+  cursor: pointer;
+  background-color: var(--bh-white);
+  color: var(--bh-black);
+  transition: all 0.1s ease;
+  user-select: none;
+  text-decoration: none;
+}
+
+.bh-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--bh-shadow);
+}
+
+.bh-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.bh-btn-primary {
+  background-color: var(--bh-red);
+  color: var(--bh-white);
+}
+
+.bh-btn-yellow {
+  background-color: var(--bh-yellow);
+  color: var(--bh-black);
+}
+
+.bh-btn-blue {
+  background-color: var(--bh-blue);
+  color: var(--bh-white);
+}
+
+.bh-btn-black {
+  background-color: var(--bh-black);
+  color: var(--bh-white);
+}
+
+.bh-btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Badges */
+.bh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  border: var(--bh-border-thin);
+  box-shadow: 1px 1px 0px var(--bh-black);
+}
+
+.bh-badge-red {
+  background-color: var(--bh-red);
+  color: var(--bh-white);
+}
+
+.bh-badge-blue {
+  background-color: var(--bh-blue);
+  color: var(--bh-white);
+}
+
+.bh-badge-yellow {
+  background-color: var(--bh-yellow);
+  color: var(--bh-black);
+}
+
+.bh-badge-green {
+  background-color: #2E7D32;
+  color: var(--bh-white);
+}
+
+.bh-badge-gray {
+  background-color: var(--bh-gray);
+  color: var(--bh-black);
+}
+
+/* Inputs */
+.bh-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  border: var(--bh-border);
+  background-color: var(--bh-white);
+  color: var(--bh-black);
+  box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.08);
+  outline: none;
+}
+
+.bh-input:focus {
+  border-color: var(--bh-blue);
+  box-shadow: var(--bh-shadow-sm);
+}
+
+/* Progress bar */
+.bh-progress-bg {
+  width: 100%;
+  height: 16px;
+  background-color: var(--bh-gray);
+  border: var(--bh-border-thin);
+  position: relative;
+  overflow: hidden;
+}
+
+.bh-progress-bar {
+  height: 100%;
+  background-color: var(--bh-red);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(255, 255, 255, 0.3) 10px,
+    rgba(255, 255, 255, 0.3) 20px
+  );
+  transition: width 0.3s ease;
+}
+
+.bh-progress-bar.active {
+  animation: bh-stripes 1.5s linear infinite;
+}
+
+@keyframes bh-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bh-gray);
+  border-left: 1px solid var(--bh-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bh-black);
+  border: 1px solid var(--bh-black);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bh-red);
+}
