@@ -17,6 +17,11 @@ test_*.py
 node_modules/
 web/node_modules/
 
+# Build artifacts and frontend dist
+dist/
+web/dist/
+!web/dist/.gitkeep
+
 # Download and user data directories
 download/
 tasks.json
