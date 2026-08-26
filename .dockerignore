@@ -1,0 +1,17 @@
+# Ignore host dependencies and build artifacts
+node_modules/
+web/node_modules/
+dist/
+web/dist/
+download/
+.git/
+.gitignore
+suencomic
+manga-downloader
+*.exe
+tasks.json
+config.json
+subscriptions.json
+.DS_Store
+.idea/
+.vscode/

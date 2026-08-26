@@ -4,14 +4,21 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /web
 
-# 配置国内 Alpine 镜像与 npmmirror (淘宝 npm) 镜像源
+# 配置国内 Alpine 镜像与 npmmirror 镜像源
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     npm config set registry https://registry.npmmirror.com
 
+# 优先安装依赖
 COPY web/package*.json ./
 RUN npm install
-COPY web/ ./
-RUN npm run build
+
+# 显式拷贝前端源码文件，杜绝宿主机 node_modules 覆盖
+COPY web/src ./src
+COPY web/index.html ./
+COPY web/vite.config.js ./
+
+# 确保可执行权限并完成构建
+RUN chmod -R +x node_modules/.bin && npm run build
 
 # ==========================================
 # STAGE 2: Build Single Go Binary Executable
@@ -19,7 +26,7 @@ RUN npm run build
 FROM golang:1.23-alpine AS backend-builder
 WORKDIR /app
 
-# 配置国内 Alpine 镜像与 GoProxy 镜像源 (goproxy.cn)
+# 配置国内 Alpine 镜像与 GoProxy 国内代理 (goproxy.cn)
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GO111MODULE=on
 
