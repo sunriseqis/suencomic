@@ -54,10 +54,10 @@ func (s *CopyMangaSource) doRequest(ctx context.Context, apiPath string) (*http.
 	}
 
 	resChan := make(chan result, len(s.baseURLs))
-	reqCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	client := CreateHTTPClient(3500 * time.Millisecond)
+	client := CreateHTTPClient(8 * time.Second)
 
 	for _, base := range s.baseURLs {
 		go func(baseURL string) {

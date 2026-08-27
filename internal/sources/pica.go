@@ -180,21 +180,13 @@ func (s *PicaSource) doRequest(ctx context.Context, method, rawPath string, body
 
 func (s *PicaSource) Ping(ctx context.Context) (time.Duration, error) {
 	start := time.Now()
-	client := CreateHTTPClient(3 * time.Second)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", s.baseURL+"/categories", nil)
-	if err != nil {
-		return 0, err
-	}
-	s.setHeaders(req, "categories")
-
-	resp, err := client.Do(req)
+	resp, err := s.doRequest(ctx, "GET", "categories", nil)
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 401 {
+	if resp.StatusCode >= 400 && resp.StatusCode != 401 {
 		return 0, fmt.Errorf("HTTP status %d", resp.StatusCode)
 	}
 	return time.Since(start), nil

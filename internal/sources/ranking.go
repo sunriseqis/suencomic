@@ -495,6 +495,9 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	}
 	homeCacheMu.RUnlock()
 
+	fetchCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
 	var wg sync.WaitGroup
 	var mbz, dm5, copyM, pica []MangaSearchResult
 
@@ -502,29 +505,35 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		mbz = m.FetchMangaBZRank(ctx)
+		mbz = m.FetchMangaBZRank(fetchCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		dm5 = m.FetchDM5Rank(ctx)
+		dm5 = m.FetchDM5Rank(fetchCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		copyM = m.FetchCopyMangaRank(ctx)
+		copyM = m.FetchCopyMangaRank(fetchCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		pica = m.FetchPicaRank(ctx)
+		pica = m.FetchPicaRank(fetchCtx)
 	}()
 
 	wg.Wait()
 
-	// If a source returned empty (due to offline or temporary block), provide graceful fallbacks
+	// If a source returned empty (due to offline or initial loading), provide graceful fallbacks
 	if len(mbz) == 0 {
 		mbz = ShueishaCatalog
 	}
 	if len(dm5) == 0 {
 		dm5 = ShueishaCatalog
+	}
+	if len(copyM) == 0 {
+		copyM = ShueishaCatalog
+	}
+	if len(pica) == 0 {
+		pica = ShueishaCatalog
 	}
 
 	result := HomeRankings{

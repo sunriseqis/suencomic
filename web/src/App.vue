@@ -871,7 +871,13 @@ async function loadHomeData() {
     const res = await fetch('/api/home')
     const json = await res.json()
     if (json.code === 0 && json.data) {
-      homeData.value = json.data
+      homeData.value = {
+        shueisha: json.data.shueisha || [],
+        mangabz: json.data.mangabz || [],
+        dm5: json.data.dm5 || [],
+        copymanga: json.data.copymanga || [],
+        pica: json.data.pica || []
+      }
     }
   } catch (err) {
     console.error('Load home error:', err)
@@ -885,7 +891,7 @@ async function runSpeedTest() {
   try {
     const res = await fetch('/api/sources/speedtest')
     const json = await res.json()
-    if (json.code === 0) {
+    if (json.code === 0 && Array.isArray(json.data)) {
       speedResults.value = json.data
     }
   } catch (err) {

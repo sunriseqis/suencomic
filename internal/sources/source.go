@@ -314,6 +314,30 @@ func cleanChapterTitle(title string) string {
 	return t
 }
 
+var (
+	proxyRouteMu     sync.RWMutex
+	domainNeedsProxy = make(map[string]time.Time)
+)
+
+func isDomainProxyOnly(host string) bool {
+	proxyRouteMu.RLock()
+	defer proxyRouteMu.RUnlock()
+	exp, ok := domainNeedsProxy[host]
+	return ok && time.Now().Before(exp)
+}
+
+func markDomainNeedsProxy(host string) {
+	proxyRouteMu.Lock()
+	defer proxyRouteMu.Unlock()
+	domainNeedsProxy[host] = time.Now().Add(10 * time.Minute)
+}
+
+func markDomainDirectOk(host string) {
+	proxyRouteMu.Lock()
+	defer proxyRouteMu.Unlock()
+	delete(domainNeedsProxy, host)
+}
+
 // SmartHybridTransport implements prioritized direct connection with automatic proxy fallback
 type SmartHybridTransport struct {
 	directTransport *http.Transport
@@ -326,13 +350,28 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 		return t.directTransport.RoundTrip(req)
 	}
 
-	// 1. Try Direct Connection First
-	resp, err := t.directTransport.RoundTrip(req)
+	host := req.URL.Hostname()
+
+	// If domain previously failed direct connection, bypass direct probe and route through proxy immediately
+	if isDomainProxyOnly(host) {
+		return t.proxyTransport.RoundTrip(req)
+	}
+
+	// 1. Try Direct Connection First with isolated short probe timeout (1.5s)
+	directCtx, cancel := context.WithTimeout(req.Context(), 1500*time.Millisecond)
+	directReq := req.Clone(directCtx)
+	resp, err := t.directTransport.RoundTrip(directReq)
+	cancel()
+
 	if err == nil && resp != nil && resp.StatusCode < 500 && resp.StatusCode != http.StatusForbidden {
+		markDomainDirectOk(host)
 		return resp, nil
 	}
 
-	// 2. Direct failed, unreachable, timed out, or blocked (403/5xx) -> Seamless fallback to Proxy!
+	// Direct failed or blocked -> remember domain for 10 minutes to avoid probe delays
+	markDomainNeedsProxy(host)
+
+	// 2. Seamless fallback to Proxy with parent context
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
@@ -348,6 +387,9 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 
 // CreateHTTPClient creates an HTTP client that prioritizes direct connection and automatically falls back to proxy
 func CreateHTTPClient(timeout time.Duration) *http.Client {
+	if timeout < 8*time.Second {
+		timeout = 10 * time.Second
+	}
 	cfg := config.Get()
 	directDialer := &net.Dialer{
 		Timeout:   2500 * time.Millisecond,
