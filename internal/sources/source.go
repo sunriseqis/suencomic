@@ -314,48 +314,112 @@ func cleanChapterTitle(title string) string {
 	return t
 }
 
-// CreateHTTPClient creates an HTTP client configured with proxy (if set) and TLS settings
+// SmartHybridTransport implements prioritized direct connection with automatic proxy fallback
+type SmartHybridTransport struct {
+	directTransport *http.Transport
+	proxyTransport  *http.Transport
+	hasProxy        bool
+}
+
+func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !t.hasProxy || t.proxyTransport == nil {
+		return t.directTransport.RoundTrip(req)
+	}
+
+	// 1. Try Direct Connection First
+	resp, err := t.directTransport.RoundTrip(req)
+	if err == nil && resp != nil && resp.StatusCode < 500 && resp.StatusCode != http.StatusForbidden {
+		return resp, nil
+	}
+
+	// 2. Direct failed, unreachable, timed out, or blocked (403/5xx) -> Seamless fallback to Proxy!
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+
+	if req.Body != nil && req.GetBody != nil {
+		if newBody, bErr := req.GetBody(); bErr == nil {
+			req.Body = newBody
+		}
+	}
+
+	return t.proxyTransport.RoundTrip(req)
+}
+
+// CreateHTTPClient creates an HTTP client that prioritizes direct connection and automatically falls back to proxy
 func CreateHTTPClient(timeout time.Duration) *http.Client {
 	cfg := config.Get()
-	dialer := &net.Dialer{
-		Timeout:   3 * time.Second,
+	directDialer := &net.Dialer{
+		Timeout:   2500 * time.Millisecond,
 		KeepAlive: 30 * time.Second,
 	}
 
-	transport := &http.Transport{
+	directTransport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		DialContext:           dialer.DialContext,
-		TLSHandshakeTimeout:   3 * time.Second,
+		DialContext:           directDialer.DialContext,
+		TLSHandshakeTimeout:   2500 * time.Millisecond,
 		ResponseHeaderTimeout: 4 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableKeepAlives:     false,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
+		Proxy:                 nil,
 	}
+
+	var proxyTransport *http.Transport
+	hasProxy := false
 
 	if cfg.Proxy != "" {
 		proxyURL, err := url.Parse(cfg.Proxy)
 		if err == nil {
+			hasProxy = true
+			proxyDialer := &net.Dialer{
+				Timeout:   4 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}
+			proxyTransport = &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+				TLSHandshakeTimeout:   3500 * time.Millisecond,
+				ResponseHeaderTimeout: 6 * time.Second,
+				DisableKeepAlives:     false,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+			}
+
 			if proxyURL.Scheme == "socks5" || proxyURL.Scheme == "socks5h" {
-				sDialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, dialer)
+				sDialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, proxyDialer)
 				if sErr == nil {
-					transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					proxyTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 						return sDialer.Dial(network, addr)
 					}
 				}
 			} else {
-				transport.Proxy = http.ProxyURL(proxyURL)
+				proxyTransport.Proxy = http.ProxyURL(proxyURL)
+				proxyTransport.DialContext = proxyDialer.DialContext
 			}
 		}
-	} else {
-		// Use environment proxy if set
-		transport.Proxy = http.ProxyFromEnvironment
+	}
+
+	if !hasProxy {
+		if http.ProxyFromEnvironment != nil {
+			directTransport.Proxy = http.ProxyFromEnvironment
+		}
+		return &http.Client{
+			Transport: directTransport,
+			Timeout:   timeout,
+		}
 	}
 
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
+		Transport: &SmartHybridTransport{
+			directTransport: directTransport,
+			proxyTransport:  proxyTransport,
+			hasProxy:        hasProxy,
+		},
+		Timeout: timeout,
 	}
 }

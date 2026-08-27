@@ -144,71 +144,63 @@
           </button>
         </div>
 
-        <!-- Shueisha Collection Section -->
+        <!-- Four Source + Shueisha Category Tabs -->
+        <div class="home-tabs-container">
+          <div class="home-source-tabs">
+            <button 
+              v-for="tab in homeSourceTabs"
+              :key="tab.id"
+              class="source-tab-btn"
+              :class="{ active: activeHomeSource === tab.id }"
+              @click="activeHomeSource = tab.id"
+            >
+              <span class="tab-indicator" :class="'indicator-' + tab.color"></span>
+              <span class="tab-name">{{ tab.name }}</span>
+              <span class="tab-badge mono">{{ tab.badge }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Manga Grid for Selected Source -->
         <div class="home-section-block">
           <div class="section-title-bar">
             <div class="title-left">
-              <span class="block-indicator red-block"></span>
-              <h3 class="section-heading">集英社（SHUEISHA / 少年JUMP）殿堂名作榜</h3>
+              <span class="block-indicator" :class="activeTabObj.color + '-block'"></span>
+              <h3 class="section-heading">{{ activeTabObj.name }}</h3>
             </div>
-            <span class="mono sec-sub">收录 尾田荣一郎 / 吾峠呼世晴 / 芥见下下 / 藤本树 / 岸本齐史 等大师作品</span>
+            <span class="mono sec-sub">{{ activeTabObj.desc }}</span>
           </div>
 
-          <div class="manga-grid">
+          <div v-if="loadingHome" class="loading-box">
+            <div class="bh-loader"></div>
+            <p class="mono">正在实时拉取 {{ activeTabObj.name }} 榜单数据...</p>
+          </div>
+
+          <div v-else-if="currentHomeList.length > 0" class="manga-grid">
             <div 
-              v-for="(item, idx) in homeData.shueisha" 
-              :key="'shueisha_' + item.id" 
+              v-for="(item, idx) in currentHomeList" 
+              :key="activeHomeSource + '_' + item.id + '_' + idx" 
               class="manga-card bh-card"
               @click="openMangaDetail(item)"
             >
               <div class="manga-cover-wrap">
                 <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
-                <span class="rank-badge mono">TOP {{ idx + 1 }}</span>
+                <span class="rank-badge mono" :class="{ 'top-three': idx < 3 }">TOP {{ idx + 1 }}</span>
                 <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
               </div>
               <div class="manga-info">
                 <h4 class="manga-title" :title="item.title">{{ item.title }}</h4>
                 <p v-if="item.author" class="manga-author">{{ item.author }}</p>
                 <p v-if="item.latest_chapter" class="manga-latest">{{ item.latest_chapter }}</p>
-                <button class="bh-btn bh-btn-sm bh-btn-primary full-w-btn">
+                <button class="bh-btn bh-btn-sm full-w-btn" :class="idx < 3 ? 'bh-btn-primary' : 'bh-btn-yellow'">
                   查看下载
                 </button>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Live Trending Leaderboard -->
-        <div v-if="homeData.trending && homeData.trending.length > 0" class="home-section-block">
-          <div class="section-title-bar">
-            <div class="title-left">
-              <span class="block-indicator yellow-block"></span>
-              <h3 class="section-heading">全网多源实时热度飙升榜</h3>
-            </div>
-            <span class="mono sec-sub">实时爬取三大源站点热门检索与人气排行</span>
-          </div>
-
-          <div class="manga-grid">
-            <div 
-              v-for="(item, idx) in homeData.trending" 
-              :key="'trending_' + item.source + '_' + item.id" 
-              class="manga-card bh-card"
-              @click="openMangaDetail(item)"
-            >
-              <div class="manga-cover-wrap">
-                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
-                <span class="rank-badge mono" :class="{ 'top-three': idx < 3 }">#{{ idx + 1 }}</span>
-                <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
-              </div>
-              <div class="manga-info">
-                <h4 class="manga-title" :title="item.title">{{ item.title }}</h4>
-                <p v-if="item.author" class="manga-author">作者: {{ item.author }}</p>
-                <p v-if="item.latest_chapter" class="manga-latest">{{ item.latest_chapter }}</p>
-                <button class="bh-btn bh-btn-sm bh-btn-yellow full-w-btn">
-                  查看下载
-                </button>
-              </div>
-            </div>
+          <div v-else class="empty-box">
+            <p class="mono">暂无热榜数据，正在自动重试...</p>
           </div>
         </div>
       </section>
@@ -761,10 +753,30 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 const currentTab = ref('home')
 const homeData = ref({
   shueisha: [],
-  trending: [],
-  classics: []
+  mangabz: [],
+  dm5: [],
+  copymanga: [],
+  pica: []
 })
 const loadingHome = ref(false)
+const activeHomeSource = ref('shueisha')
+
+const homeSourceTabs = [
+  { id: 'shueisha', name: '集英社 JUMP 殿堂榜', badge: 'TOP 12', color: 'red', desc: '收录 尾田荣一郎 / 吾峠呼世晴 / 芥见下下 / 岸本齐史 等大师殿堂名作' },
+  { id: 'mangabz', name: '漫画BZ 热门榜', badge: '实时 TOP 12', color: 'blue', desc: '全站综合人气热度最高作品，支持一键极速解析' },
+  { id: 'dm5', name: '动漫屋 (DM5) 热门榜', badge: '实时 TOP 12', color: 'yellow', desc: '动漫屋实时飙升排行与人气长青神作' },
+  { id: 'copymanga', name: '拷贝漫画 热门榜', badge: '周榜 TOP 12', color: 'blue', desc: '全网超高人气、连载更新最前沿的高清漫画' },
+  { id: 'pica', name: '哔咔漫画 精选榜', badge: '精选 TOP 12', color: 'red', desc: '哔咔漫画全本完结与同人经典排行榜' },
+]
+
+const activeTabObj = computed(() => {
+  return homeSourceTabs.find(t => t.id === activeHomeSource.value) || homeSourceTabs[0]
+})
+
+const currentHomeList = computed(() => {
+  if (!homeData.value) return []
+  return homeData.value[activeHomeSource.value] || []
+})
 
 const searchQuery = ref('')
 const searchSource = ref('all')
@@ -1544,6 +1556,78 @@ onUnmounted(() => {
 
 .red-block { background-color: var(--bh-red); }
 .yellow-block { background-color: var(--bh-yellow); }
+.blue-block { background-color: var(--bh-blue); }
+.pink-block { background-color: #E91E63; }
+
+/* Home Source Tabs (Bauhaus Tab Bar) */
+.home-tabs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.home-source-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.source-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--bh-white);
+  border: var(--bh-border);
+  box-shadow: 2px 2px 0px var(--bh-black);
+  cursor: pointer;
+  font-family: var(--bh-font-main);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bh-black);
+  transition: all 0.15s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.source-tab-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px var(--bh-black);
+}
+
+.source-tab-btn.active {
+  background-color: var(--bh-black);
+  color: var(--bh-white);
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px var(--bh-black);
+}
+
+.tab-indicator {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--bh-black);
+}
+
+.indicator-red { background-color: var(--bh-red); }
+.indicator-blue { background-color: var(--bh-blue); }
+.indicator-yellow { background-color: var(--bh-yellow); }
+.indicator-pink { background-color: #E91E63; }
+
+.source-tab-btn.active .tab-indicator {
+  border-color: var(--bh-white);
+}
+
+.tab-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background-color: var(--bh-gray);
+  color: var(--bh-black);
+  border: var(--bh-border-thin);
+}
+
+.source-tab-btn.active .tab-badge {
+  background-color: var(--bh-yellow);
+  color: var(--bh-black);
+  border-color: var(--bh-black);
+}
 
 .section-heading {
   font-size: 18px;
