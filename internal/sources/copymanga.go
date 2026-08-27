@@ -26,14 +26,16 @@ type CopyMangaSource struct {
 func NewCopyMangaSource() *CopyMangaSource {
 	return &CopyMangaSource{
 		baseURLs: []string{
-			"https://api.copymanga.tv",
 			"https://api.mangacopy.com",
+			"https://api.copy-manga.com",
+			"https://api.copymanga.tv",
+			"https://api.copymanga.org",
 			"https://api.copymanga.site",
 		},
 		webBaseURLs: []string{
 			"https://www.mangacopy.com",
+			"https://www.copy-manga.com",
 			"https://www.copymanga.tv",
-			"https://www.copymanga.site",
 		},
 		aesKey: "op0zzpvv.nmn.00p",
 	}

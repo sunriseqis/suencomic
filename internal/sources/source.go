@@ -319,12 +319,14 @@ func cleanChapterTitle(title string) string {
 var (
 	proxyRouteMu     sync.RWMutex
 	domainNeedsProxy = map[string]time.Time{
-		"api.copymanga.tv":  time.Now().Add(365 * 24 * time.Hour),
-		"api.copymanga.org": time.Now().Add(365 * 24 * time.Hour),
-		"www.dm5.com":       time.Now().Add(365 * 24 * time.Hour),
-		"dm5.com":           time.Now().Add(365 * 24 * time.Hour),
-		"www.mangabz.com":   time.Now().Add(365 * 24 * time.Hour),
-		"mangabz.com":       time.Now().Add(365 * 24 * time.Hour),
+		"api.mangacopy.com":  time.Now().Add(365 * 24 * time.Hour),
+		"api.copy-manga.com": time.Now().Add(365 * 24 * time.Hour),
+		"api.copymanga.tv":   time.Now().Add(365 * 24 * time.Hour),
+		"api.copymanga.org":  time.Now().Add(365 * 24 * time.Hour),
+		"www.dm5.com":        time.Now().Add(365 * 24 * time.Hour),
+		"dm5.com":            time.Now().Add(365 * 24 * time.Hour),
+		"www.mangabz.com":    time.Now().Add(365 * 24 * time.Hour),
+		"mangabz.com":        time.Now().Add(365 * 24 * time.Hour),
 	}
 )
 
