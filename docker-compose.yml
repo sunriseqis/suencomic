@@ -19,6 +19,15 @@ services:
     environment:
       - PORT=8090
       - TZ=Asia/Shanghai
+      # ===================================================
+      # 代理设置 (重要！)
+      # 容器内无法直接访问宿主机 LAN IP，必须使用 host.docker.internal
+      # 请将端口 20170 替换为你实际的代理端口
+      # 如已在 config.json 的 proxy 字段配置代理，可删除下面三行
+      # ===================================================
+      - HTTPS_PROXY=http://host.docker.internal:20170
+      - HTTP_PROXY=http://host.docker.internal:20170
+      - ALL_PROXY=http://host.docker.internal:20170
     volumes:
       # 持久化漫画下载目录
       - ./download:/app/download

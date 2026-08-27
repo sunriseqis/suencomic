@@ -76,6 +76,19 @@ func Init() *Config {
 		_ = saveNoLock(&currentConfig)
 	}
 
+	// If proxy is not configured in config.json, fall back to standard env vars.
+	// This allows Docker deployments to inject proxy via environment:
+	//   HTTP_PROXY=http://host.docker.internal:20170
+	//   HTTPS_PROXY=http://host.docker.internal:20170
+	if currentConfig.Proxy == "" {
+		for _, envKey := range []string{"HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy", "SOCKS5_PROXY", "ALL_PROXY"} {
+			if v := os.Getenv(envKey); v != "" {
+				currentConfig.Proxy = v
+				break
+			}
+		}
+	}
+
 	// Ensure download directory exists
 	_ = os.MkdirAll(currentConfig.DownloadDir, 0755)
 

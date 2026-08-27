@@ -387,11 +387,14 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 // CreateHTTPClient creates an HTTP client that prioritizes direct connection and automatically falls back to proxy
 func CreateHTTPClient(timeout time.Duration) *http.Client {
 	if timeout < 8*time.Second {
-		timeout = 10 * time.Second
+		timeout = 15 * time.Second
 	}
 	cfg := config.Get()
 	directDialer := &net.Dialer{
-		Timeout:   2500 * time.Millisecond,
+		// Short direct dial timeout: in Docker/restricted envs, direct connection to foreign
+		// sites quickly fails and we rely on proxy fallback. 1.5s is enough to confirm
+		// connectivity without blocking proxy fallback too long.
+		Timeout:   1500 * time.Millisecond,
 		KeepAlive: 30 * time.Second,
 	}
 
@@ -400,8 +403,8 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 			InsecureSkipVerify: true,
 		},
 		DialContext:           directDialer.DialContext,
-		TLSHandshakeTimeout:   2500 * time.Millisecond,
-		ResponseHeaderTimeout: 4 * time.Second,
+		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableKeepAlives:     false,
 		MaxIdleConns:          100,
@@ -417,15 +420,15 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 		if err == nil {
 			hasProxy = true
 			proxyDialer := &net.Dialer{
-				Timeout:   4 * time.Second,
+				Timeout:   10 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			proxyTransport = &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
-				TLSHandshakeTimeout:   3500 * time.Millisecond,
-				ResponseHeaderTimeout: 6 * time.Second,
+				TLSHandshakeTimeout:   8 * time.Second,
+				ResponseHeaderTimeout: 12 * time.Second,
 				DisableKeepAlives:     false,
 				MaxIdleConns:          100,
 				IdleConnTimeout:       90 * time.Second,

@@ -33,7 +33,7 @@ var (
 
 // FetchMangaBZRank fetches top 12 real-time popular manga from MangaBZ
 func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResult, error) {
-	client := CreateHTTPClient(10 * time.Second)
+	client := CreateHTTPClient(20 * time.Second)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.mangabz.com/manga-list-0-0-10-p1/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -104,7 +104,7 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResu
 
 // FetchDM5Rank fetches top 12 real-time popular manga from DM5 (动漫屋)
 func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, error) {
-	client := CreateHTTPClient(10 * time.Second)
+	client := CreateHTTPClient(20 * time.Second)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-rank/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -389,7 +389,7 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	}
 	homeCacheMu.RUnlock()
 
-	fetchCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	fetchCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
 	var wg sync.WaitGroup
