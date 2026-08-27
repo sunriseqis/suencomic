@@ -148,7 +148,7 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) []MangaSearchResul
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 	req.Header.Set("Referer", "https://www.mangabz.com/")
 
 	resp, err := client.Do(req)
@@ -166,6 +166,8 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) []MangaSearchResul
 	}
 
 	var results []MangaSearchResult
+	seen := make(map[string]bool)
+
 	doc.Find(".mh-item").Each(func(i int, sel *goquery.Selection) {
 		if len(results) >= 12 {
 			return
@@ -177,6 +179,12 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) []MangaSearchResul
 			return
 		}
 		id := strings.Trim(href, "/")
+		if seen[id] || seen[title] {
+			return
+		}
+		seen[id] = true
+		seen[title] = true
+
 		cover, _ := sel.Find("img.mh-cover, img").Attr("src")
 		author := strings.TrimSpace(sel.Find(".author").Text())
 		if author == "" {
@@ -205,7 +213,7 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) []MangaSearchResult {
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 	req.Header.Set("Referer", "https://www.dm5.com/")
 
 	resp, err := client.Do(req)
@@ -224,43 +232,71 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) []MangaSearchResult {
 
 	bgURLRegex := regexp.MustCompile(`url\(([^)]+)\)`)
 	var results []MangaSearchResult
-	doc.Find(".mh-item").Each(func(i int, sel *goquery.Selection) {
-		if len(results) >= 12 {
-			return
-		}
-		tLink := sel.Find("h2.title a, .title a").First()
-		title := strings.TrimSpace(tLink.Text())
-		href, _ := tLink.Attr("href")
-		if title == "" || href == "" {
-			return
-		}
-		id := strings.Trim(href, "/")
+	seen := make(map[string]bool)
 
-		// Extract cover from img or background-image style
-		cover, _ := sel.Find("img").Attr("src")
-		if cover == "" {
-			style, _ := sel.Find(".mh-cover").Attr("style")
-			if match := bgURLRegex.FindStringSubmatch(style); len(match) > 1 {
-				cover = strings.Trim(match[1], `"' `)
+	parseDM5Items := func(d *goquery.Document) {
+		d.Find(".mh-item").Each(func(i int, sel *goquery.Selection) {
+			if len(results) >= 12 {
+				return
+			}
+			tLink := sel.Find("h2.title a, .title a").First()
+			title := strings.TrimSpace(tLink.Text())
+			href, _ := tLink.Attr("href")
+			if title == "" || href == "" {
+				return
+			}
+			id := strings.Trim(href, "/")
+			if seen[id] || seen[title] {
+				return
+			}
+			seen[id] = true
+			seen[title] = true
+
+			// Extract cover from img or background-image style
+			cover, _ := sel.Find("img").Attr("src")
+			if cover == "" {
+				style, _ := sel.Find(".mh-cover").Attr("style")
+				if match := bgURLRegex.FindStringSubmatch(style); len(match) > 1 {
+					cover = strings.Trim(match[1], `"' `)
+				}
+			}
+			author := strings.TrimSpace(sel.Find(".zl, .author").Text())
+			author = strings.TrimPrefix(author, "作者：")
+			if author == "" {
+				author = "动漫屋热门"
+			}
+			latest := strings.TrimSpace(sel.Find(".chapter a").Text())
+
+			results = append(results, MangaSearchResult{
+				ID:            id,
+				Title:         title,
+				Cover:         cover,
+				Author:        author,
+				LatestChapter: latest,
+				Source:        "dm5",
+				SourceName:    "DM5",
+			})
+		})
+	}
+
+	parseDM5Items(doc)
+
+	// If fewer than 12 unique items from rank page, fill with DM5 popular catalog
+	if len(results) < 12 {
+		req2, err2 := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-list-0-0-10/", nil)
+		if err2 == nil {
+			req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+			req2.Header.Set("Referer", "https://www.dm5.com/")
+			resp2, rErr2 := client.Do(req2)
+			if rErr2 == nil && resp2.StatusCode == 200 {
+				doc2, dErr2 := goquery.NewDocumentFromReader(resp2.Body)
+				resp2.Body.Close()
+				if dErr2 == nil {
+					parseDM5Items(doc2)
+				}
 			}
 		}
-		author := strings.TrimSpace(sel.Find(".zl, .author").Text())
-		author = strings.TrimPrefix(author, "作者：")
-		if author == "" {
-			author = "动漫屋热门"
-		}
-		latest := strings.TrimSpace(sel.Find(".chapter a").Text())
-
-		results = append(results, MangaSearchResult{
-			ID:            id,
-			Title:         title,
-			Cover:         cover,
-			Author:        author,
-			LatestChapter: latest,
-			Source:        "dm5",
-			SourceName:    "DM5",
-		})
-	})
+	}
 
 	return results
 }

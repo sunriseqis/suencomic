@@ -281,7 +281,7 @@ func SetupRouter(
 				ModTime string `json:"mod_time"`
 			}
 
-			var files []fileEntry
+			files := make([]fileEntry, 0)
 			_ = filepath.Walk(cfg.DownloadDir, func(path string, info os.FileInfo, err error) error {
 				if err != nil || info == nil {
 					return nil

@@ -472,12 +472,12 @@
           </button>
         </div>
 
-        <div v-if="downloadFiles.length === 0" class="empty-box bh-card">
+        <div v-if="!downloadFiles || downloadFiles.length === 0" class="empty-box bh-card">
           <p class="empty-title">// 暂无下载文件</p>
           <p class="empty-desc">当前 ./download 目录下暂无文件，下载完成后的漫画将在此显示。</p>
         </div>
 
-        <div v-else class="files-table-wrap bh-card">
+        <div v-else-if="downloadFiles && downloadFiles.length > 0" class="files-table-wrap bh-card">
           <table class="files-table mono">
             <thead>
               <tr>
@@ -1134,11 +1134,14 @@ async function loadDownloadsList() {
   try {
     const res = await fetch('/api/downloads/list')
     const json = await res.json()
-    if (json.code === 0) {
+    if (json.code === 0 && Array.isArray(json.data)) {
       downloadFiles.value = json.data
+    } else {
+      downloadFiles.value = []
     }
   } catch (err) {
     console.error('Load downloads error:', err)
+    downloadFiles.value = []
   }
 }
 
