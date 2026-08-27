@@ -166,7 +166,15 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, 
 				}
 			}
 			author := strings.TrimSpace(sel.Find(".zl, .author").Text())
+			author = strings.ReplaceAll(author, "\n", " ")
+			author = strings.ReplaceAll(author, "\r", " ")
+			author = strings.ReplaceAll(author, "\t", " ")
+			if idx := strings.Index(author, "评分"); idx != -1 {
+				author = author[:idx]
+			}
 			author = strings.TrimPrefix(author, "作者：")
+			author = strings.TrimPrefix(author, "作者:")
+			author = strings.TrimSpace(author)
 			if author == "" {
 				author = "动漫屋热门"
 			}
@@ -187,7 +195,7 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, 
 	parseDM5Items(doc)
 
 	if len(results) < 12 {
-		req2, err2 := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-list-0-0-10/", nil)
+		req2, err2 := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-list-0-0-10-p1/", nil)
 		if err2 == nil {
 			req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/122.0.0.0")
 			req2.Header.Set("Referer", "https://www.dm5.com/")

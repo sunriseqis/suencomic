@@ -333,7 +333,13 @@ func SetupRouter(
 			}
 
 			// Try to open file in staticFS
-			f, err := staticFS.Open(strings.TrimPrefix(path, "/"))
+			cleanRelPath := strings.TrimPrefix(path, "/")
+			if cleanRelPath == "" || cleanRelPath == "index.html" {
+				c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+				c.Header("Pragma", "no-cache")
+				c.Header("Expires", "0")
+			}
+			f, err := staticFS.Open(cleanRelPath)
 			if err == nil {
 				_ = f.Close()
 				fileServer.ServeHTTP(c.Writer, c.Request)
@@ -341,6 +347,9 @@ func SetupRouter(
 			}
 
 			// SPA Fallback to index.html
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
 			c.Request.URL.Path = "/"
 			fileServer.ServeHTTP(c.Writer, c.Request)
 		})

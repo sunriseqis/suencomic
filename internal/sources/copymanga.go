@@ -54,10 +54,10 @@ func (s *CopyMangaSource) doRequest(ctx context.Context, apiPath string) (*http.
 	}
 
 	resChan := make(chan result, len(s.baseURLs))
-	reqCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	client := CreateHTTPClient(8 * time.Second)
+	client := CreateHTTPClient(15 * time.Second)
 
 	for _, base := range s.baseURLs {
 		go func(baseURL string) {
@@ -77,8 +77,11 @@ func (s *CopyMangaSource) doRequest(ctx context.Context, apiPath string) (*http.
 
 			resp, err := client.Do(req)
 			if err == nil && resp.StatusCode == 200 {
-				resChan <- result{resp, nil}
-				return
+				cType := resp.Header.Get("Content-Type")
+				if !strings.Contains(cType, "text/html") {
+					resChan <- result{resp, nil}
+					return
+				}
 			}
 			if resp != nil {
 				resp.Body.Close()
@@ -86,7 +89,7 @@ func (s *CopyMangaSource) doRequest(ctx context.Context, apiPath string) (*http.
 			if err != nil {
 				resChan <- result{nil, err}
 			} else {
-				resChan <- result{nil, fmt.Errorf("HTTP status %d", resp.StatusCode)}
+				resChan <- result{nil, fmt.Errorf("HTTP status %d or blocked HTML", resp.StatusCode)}
 			}
 		}(base)
 	}
