@@ -135,9 +135,9 @@
         <!-- Hero Banner -->
         <div class="home-hero bh-card">
           <div class="hero-text">
-            <span class="bh-badge bh-badge-red mono">// SHUEISHA & TOP CHARTS</span>
-            <h2 class="hero-title">集英社周刊少年 JUMP 专区 & 全网实时热榜</h2>
-            <p class="hero-desc">聚合收录集英社殿堂级名作与全网最新排行漫画，支持多源极速下载、原画质解析与一键导出 PDF/CBZ/EPUB。</p>
+            <span class="bh-badge bh-badge-red mono">// MULTI-SOURCE TOP CHARTS</span>
+            <h2 class="hero-title">四大漫画源全网实时热门榜单</h2>
+            <p class="hero-desc">实时聚合 MangaBZ、动漫屋 (DM5)、拷贝漫画、哔咔漫画四大源站点热门榜单，支持分源切换、极速解析与一键导出 PDF/CBZ/EPUB。</p>
           </div>
           <button class="bh-btn bh-btn-primary hero-btn" @click="currentTab = 'search'">
             探索漫画全库
@@ -752,37 +752,20 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const currentTab = ref('home')
 
-const defaultShueisha = [
-  { id: '139bz', title: '海贼王 (ONE PIECE)', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '尾田荣一郎 (集英社)', latest_chapter: '周刊少年Jump 连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '73bz', title: '鬼灭之刃', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: '吾峠呼世晴 (集英社)', latest_chapter: '全206话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '38bz', title: '一拳超人', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: 'ONE / 村田雄介 (集英社)', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '266bz', title: '咒术回战', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '芥见下下 (集英社)', latest_chapter: '周刊少年Jump 连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '577bz', title: '电锯人 (链锯人)', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '藤本树 (集英社)', latest_chapter: '少年Jump+ 连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '611bz', title: 'SPY×FAMILY 间谍过家家', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '远藤达哉 (集英社)', latest_chapter: '少年Jump+ 连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '142bz', title: '火影忍者 (NARUTO)', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: '岸本齐史 (集英社)', latest_chapter: '全700话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '1bz', title: '死神 (BLEACH / 境·界)', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: '久保带人 (集英社)', latest_chapter: '全686话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '892bz', title: '灌篮高手 (SLAM DUNK)', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: '井上雄彦 (集英社)', latest_chapter: '全31卷 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '440bz', title: '龙珠 (DRAGON BALL)', cover: 'https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg', author: '鸟山明 (集英社)', latest_chapter: '全519话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '46899bz', title: '全职猎人 (HUNTER×HUNTER)', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: '富坚义博 (集英社)', latest_chapter: '周刊少年Jump', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '263bz', title: '排球少年！！', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: '古馆春一 (集英社)', latest_chapter: '全402话 完结', source: 'mangabz', source_name: 'MangaBZ' }
-]
-
 const homeData = ref({
-  shueisha: [...defaultShueisha],
-  mangabz: [...defaultShueisha],
-  dm5: [...defaultShueisha],
-  copymanga: [...defaultShueisha],
-  pica: [...defaultShueisha]
+  mangabz: [],
+  dm5: [],
+  copymanga: [],
+  pica: []
 })
 const loadingHome = ref(false)
-const activeHomeSource = ref('shueisha')
+const activeHomeSource = ref('mangabz')
 
 const homeSourceTabs = [
-  { id: 'shueisha', name: '集英社 JUMP 殿堂榜', badge: 'TOP 12', color: 'red', desc: '收录 尾田荣一郎 / 吾峠呼世晴 / 芥见下下 / 岸本齐史 等大师殿堂名作' },
-  { id: 'mangabz', name: '漫画BZ 热门榜', badge: '实时 TOP 12', color: 'blue', desc: '全站综合人气热度最高作品，支持一键极速解析' },
+  { id: 'mangabz', name: '漫画BZ (MangaBZ) 热门榜', badge: '实时 TOP 12', color: 'blue', desc: '全站综合人气热度最高作品，支持一键极速解析' },
   { id: 'dm5', name: '动漫屋 (DM5) 热门榜', badge: '实时 TOP 12', color: 'yellow', desc: '动漫屋实时飙升排行与人气长青神作' },
-  { id: 'copymanga', name: '拷贝漫画 热门榜', badge: '周榜 TOP 12', color: 'blue', desc: '全网超高人气、连载更新最前沿的高清漫画' },
-  { id: 'pica', name: '哔咔漫画 精选榜', badge: '精选 TOP 12', color: 'red', desc: '哔咔漫画全本完结与同人经典排行榜' },
+  { id: 'copymanga', name: '拷贝漫画 (CopyManga) 热门榜', badge: '周榜 TOP 12', color: 'blue', desc: '全网超高人气、连载更新最前沿的高清漫画' },
+  { id: 'pica', name: '哔咔漫画 (PicAcg) 精选榜', badge: '24H TOP 12', color: 'red', desc: '哔咔漫画全本完结与同人经典排行榜' },
 ]
 
 const activeTabObj = computed(() => {

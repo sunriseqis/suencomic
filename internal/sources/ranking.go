@@ -15,123 +15,10 @@ import (
 )
 
 type HomeRankings struct {
-	Shueisha  []MangaSearchResult `json:"shueisha"`
 	MangaBZ   []MangaSearchResult `json:"mangabz"`
 	DM5       []MangaSearchResult `json:"dm5"`
 	CopyManga []MangaSearchResult `json:"copymanga"`
 	Pica      []MangaSearchResult `json:"pica"`
-}
-
-// Fixed flagship Shueisha / Shōnen Jump masterpieces catalog for guaranteed instant zero-latency loading
-var ShueishaCatalog = []MangaSearchResult{
-	{
-		ID:            "139bz",
-		Title:         "海贼王 (ONE PIECE)",
-		Cover:         "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg",
-		Author:        "尾田荣一郎 (集英社)",
-		LatestChapter: "周刊少年Jump 连载中",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "73bz",
-		Title:         "鬼灭之刃",
-		Cover:         "https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg",
-		Author:        "吾峠呼世晴 (集英社)",
-		LatestChapter: "全206话 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "38bz",
-		Title:         "一拳超人",
-		Cover:         "https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg",
-		Author:        "ONE / 村田雄介 (集英社)",
-		LatestChapter: "连载中",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "266bz",
-		Title:         "咒术回战",
-		Cover:         "https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg",
-		Author:        "芥见下下 (集英社)",
-		LatestChapter: "周刊少年Jump 连载中",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "577bz",
-		Title:         "电锯人 (链锯人)",
-		Cover:         "https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg",
-		Author:        "藤本树 (集英社)",
-		LatestChapter: "少年Jump+ 连载中",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "611bz",
-		Title:         "SPY×FAMILY 间谍过家家",
-		Cover:         "https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg",
-		Author:        "远藤达哉 (集英社)",
-		LatestChapter: "少年Jump+ 连载中",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "142bz",
-		Title:         "火影忍者 (NARUTO)",
-		Cover:         "https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg",
-		Author:        "岸本齐史 (集英社)",
-		LatestChapter: "全700话 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "1bz",
-		Title:         "死神 (BLEACH / 境·界)",
-		Cover:         "https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg",
-		Author:        "久保带人 (集英社)",
-		LatestChapter: "全686话 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "892bz",
-		Title:         "灌篮高手 (SLAM DUNK)",
-		Cover:         "https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg",
-		Author:        "井上雄彦 (集英社)",
-		LatestChapter: "全31卷 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "440bz",
-		Title:         "龙珠 (DRAGON BALL)",
-		Cover:         "https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg",
-		Author:        "鸟山明 (集英社)",
-		LatestChapter: "全519话 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "46899bz",
-		Title:         "全职猎人 (HUNTER×HUNTER)",
-		Cover:         "https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg",
-		Author:        "富坚义博 (集英社)",
-		LatestChapter: "周刊少年Jump",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
-	{
-		ID:            "263bz",
-		Title:         "排球少年！！",
-		Cover:         "https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg",
-		Author:        "古馆春一 (集英社)",
-		LatestChapter: "全402话 完结",
-		Source:        "mangabz",
-		SourceName:    "MangaBZ",
-	},
 }
 
 // 15-Minute in-memory cache for ultra-fast homepage loading and anti-rate-limiting
@@ -522,22 +409,20 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 
 	wg.Wait()
 
-	// If a source returned empty (due to offline or initial loading), provide graceful fallbacks
-	if len(mbz) == 0 {
-		mbz = ShueishaCatalog
+	if mbz == nil {
+		mbz = make([]MangaSearchResult, 0)
 	}
-	if len(dm5) == 0 {
-		dm5 = ShueishaCatalog
+	if dm5 == nil {
+		dm5 = make([]MangaSearchResult, 0)
 	}
-	if len(copyM) == 0 {
-		copyM = ShueishaCatalog
+	if copyM == nil {
+		copyM = make([]MangaSearchResult, 0)
 	}
-	if len(pica) == 0 {
-		pica = ShueishaCatalog
+	if pica == nil {
+		pica = make([]MangaSearchResult, 0)
 	}
 
 	result := HomeRankings{
-		Shueisha:  ShueishaCatalog,
 		MangaBZ:   mbz,
 		DM5:       dm5,
 		CopyManga: copyM,
