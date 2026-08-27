@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -73,6 +74,9 @@ func SetupRouter(
 				c.JSON(http.StatusBadRequest, gin.H{"code": 1, "error": "search keyword cannot be empty"})
 				return
 			}
+			searchCtx, cancel := context.WithTimeout(c.Request.Context(), 5500*time.Millisecond)
+			defer cancel()
+
 			sourceID := c.Query("source")
 			if sourceID != "" && sourceID != "all" {
 				src, ok := sourceMgr.GetSource(sourceID)
@@ -80,7 +84,7 @@ func SetupRouter(
 					c.JSON(http.StatusBadRequest, gin.H{"code": 1, "error": "unknown source"})
 					return
 				}
-				results, err := src.Search(c.Request.Context(), q)
+				results, err := src.Search(searchCtx, q)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "error": err.Error()})
 					return
@@ -91,7 +95,7 @@ func SetupRouter(
 			}
 
 			// Aggregate search across all sources
-			results := sourceMgr.SearchAll(c.Request.Context(), q)
+			results := sourceMgr.SearchAll(searchCtx, q)
 			c.JSON(http.StatusOK, gin.H{"code": 0, "data": results})
 		})
 

@@ -171,12 +171,17 @@ func (m *SourceManager) SearchAll(ctx context.Context, keyword string) []MangaSe
 	var mu sync.Mutex
 	var allResults []MangaSearchResult
 
+	// Hard 4-second timeout for aggregated search across all sources
+	searchCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
 	for _, src := range sources {
 		wg.Add(1)
 		go func(s MangaSource) {
 			defer wg.Done()
+
 			start := time.Now()
-			res, err := s.Search(ctx, keyword)
+			res, err := s.Search(searchCtx, keyword)
 			latency := time.Since(start).Milliseconds()
 			if err == nil && len(res) > 0 {
 				for i := range res {
@@ -189,7 +194,18 @@ func (m *SourceManager) SearchAll(ctx context.Context, keyword string) []MangaSe
 		}(src)
 	}
 
-	wg.Wait()
+	// Non-blocking wait: guarantees returning within searchCtx timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-searchCtx.Done():
+	}
+
 	return SortSearchResultsByRelevance(allResults, keyword)
 }
 
@@ -221,30 +237,25 @@ func (m *SourceManager) GetChapterImagesWithFallback(
 	}
 
 	if !cfg.AutoFallback {
-		if err != nil {
-			return nil, primarySourceID, err
-		}
-		return nil, primarySourceID, fmt.Errorf("no images found from primary source")
+		return nil, primarySourceID, fmt.Errorf("primary source returned no images and auto-fallback is disabled: %w", err)
 	}
 
-	logFn(fmt.Sprintf("[%s] 主源获取失败 (%v)，正在触发自动故障换源机制...", primarySrc.Name(), err))
+	logFn(fmt.Sprintf("⚠️ [%s] 章节获取异常 (%v)，正在启动多源智能故障换源 (Smart Auto-Fallback)...", primarySrc.Name(), err))
 
-	// Get fallback sources
-	sources := m.ListSources()
-	for _, fallbackSrc := range sources {
+	// Search other sources
+	for _, fallbackSrc := range m.ListSources() {
 		if fallbackSrc.ID() == primarySourceID {
 			continue
 		}
 
-		logFn(fmt.Sprintf("尝试备用源: %s ...", fallbackSrc.Name()))
-		// Search for the comic in fallback source
+		logFn(fmt.Sprintf("⚡ 正在从备用源 [%s] 检索匹配漫画: 《%s》...", fallbackSrc.Name(), mangaTitle))
 		searchResults, sErr := fallbackSrc.Search(ctx, mangaTitle)
 		if sErr != nil || len(searchResults) == 0 {
-			logFn(fmt.Sprintf("[%s] 未找到匹配漫画《%s》", fallbackSrc.Name(), mangaTitle))
+			logFn(fmt.Sprintf("[%s] 未找到对应漫画", fallbackSrc.Name()))
 			continue
 		}
 
-		// Find best matching manga
+		// Find closest title match
 		var targetMangaID string
 		for _, sRes := range searchResults {
 			if strings.Contains(sRes.Title, mangaTitle) || strings.Contains(mangaTitle, sRes.Title) {
@@ -306,23 +317,32 @@ func cleanChapterTitle(title string) string {
 // CreateHTTPClient creates an HTTP client configured with proxy (if set) and TLS settings
 func CreateHTTPClient(timeout time.Duration) *http.Client {
 	cfg := config.Get()
+	dialer := &net.Dialer{
+		Timeout:   3 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		DisableKeepAlives: false,
-		MaxIdleConns:      100,
-		IdleConnTimeout:   90 * time.Second,
+		DialContext:           dialer.DialContext,
+		TLSHandshakeTimeout:   3 * time.Second,
+		ResponseHeaderTimeout: 4 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableKeepAlives:     false,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
 	}
 
 	if cfg.Proxy != "" {
 		proxyURL, err := url.Parse(cfg.Proxy)
 		if err == nil {
 			if proxyURL.Scheme == "socks5" || proxyURL.Scheme == "socks5h" {
-				dialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, proxy.Direct)
+				sDialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, dialer)
 				if sErr == nil {
 					transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-						return dialer.Dial(network, addr)
+						return sDialer.Dial(network, addr)
 					}
 				}
 			} else {

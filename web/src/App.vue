@@ -889,16 +889,24 @@ async function handleSearch() {
   hasSearched.value = true
   searchResults.value = []
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
   try {
     const url = `/api/search?q=${encodeURIComponent(searchQuery.value.trim())}&source=${searchSource.value}`
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: controller.signal })
     const json = await res.json()
     if (json.code === 0 && json.data) {
       searchResults.value = json.data
     }
   } catch (err) {
-    console.error('Search error:', err)
+    if (err.name === 'AbortError') {
+      console.warn('Search timed out after 8s')
+    } else {
+      console.error('Search error:', err)
+    }
   } finally {
+    clearTimeout(timeoutId)
     searching.value = false
   }
 }

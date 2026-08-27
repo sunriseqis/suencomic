@@ -48,35 +48,59 @@ func (s *CopyMangaSource) Name() string {
 }
 
 func (s *CopyMangaSource) doRequest(ctx context.Context, apiPath string) (*http.Response, error) {
-	client := CreateHTTPClient(12 * time.Second)
-	var lastErr error
+	type result struct {
+		resp *http.Response
+		err  error
+	}
+
+	resChan := make(chan result, len(s.baseURLs))
+	reqCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+
+	client := CreateHTTPClient(3500 * time.Millisecond)
 
 	for _, base := range s.baseURLs {
-		fullURL := base + apiPath
-		req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
-		if err != nil {
-			lastErr = err
-			continue
-		}
+		go func(baseURL string) {
+			fullURL := baseURL + apiPath
+			req, err := http.NewRequestWithContext(reqCtx, "GET", fullURL, nil)
+			if err != nil {
+				resChan <- result{nil, err}
+				return
+			}
 
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-		req.Header.Set("version", "3.0.0")
-		req.Header.Set("platform", "3")
-		req.Header.Set("source", "copyApp")
-		req.Header.Set("webp", "1")
-		req.Header.Set("Accept", "application/json, text/plain, */*")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+			req.Header.Set("version", "3.0.0")
+			req.Header.Set("platform", "3")
+			req.Header.Set("source", "copyApp")
+			req.Header.Set("webp", "1")
+			req.Header.Set("Accept", "application/json, text/plain, */*")
 
-		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == 200 {
-			return resp, nil
-		}
-		if resp != nil {
-			resp.Body.Close()
-		}
-		if err != nil {
-			lastErr = err
-		} else {
-			lastErr = fmt.Errorf("HTTP status %d", resp.StatusCode)
+			resp, err := client.Do(req)
+			if err == nil && resp.StatusCode == 200 {
+				resChan <- result{resp, nil}
+				return
+			}
+			if resp != nil {
+				resp.Body.Close()
+			}
+			if err != nil {
+				resChan <- result{nil, err}
+			} else {
+				resChan <- result{nil, fmt.Errorf("HTTP status %d", resp.StatusCode)}
+			}
+		}(base)
+	}
+
+	var lastErr error
+	for i := 0; i < len(s.baseURLs); i++ {
+		select {
+		case r := <-resChan:
+			if r.err == nil && r.resp != nil {
+				return r.resp, nil
+			}
+			lastErr = r.err
+		case <-reqCtx.Done():
+			return nil, fmt.Errorf("CopyManga request timeout: %w", reqCtx.Err())
 		}
 	}
 
