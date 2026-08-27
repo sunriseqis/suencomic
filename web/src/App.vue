@@ -162,7 +162,7 @@
               @click="openMangaDetail(item)"
             >
               <div class="manga-cover-wrap">
-                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" />
+                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
                 <span class="rank-badge mono">TOP {{ idx + 1 }}</span>
                 <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
               </div>
@@ -196,7 +196,7 @@
               @click="openMangaDetail(item)"
             >
               <div class="manga-cover-wrap">
-                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" />
+                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
                 <span class="rank-badge mono" :class="{ 'top-three': idx < 3 }">#{{ idx + 1 }}</span>
                 <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
               </div>
@@ -287,7 +287,7 @@
               @click="openMangaDetail(item)"
             >
               <div class="manga-cover-wrap">
-                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" />
+                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
                 <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
                 <span v-if="item.latency_ms > 0" class="latency-tag mono">{{ item.latency_ms }}ms</span>
               </div>
@@ -616,7 +616,7 @@
 
         <div v-else-if="activeMangaDetail" class="modal-body">
           <div class="detail-top-card">
-            <img :src="activeMangaDetail.cover || activeManga?.cover" class="detail-cover" alt="cover" />
+            <img :src="activeMangaDetail.cover || activeManga?.cover" class="detail-cover" alt="cover" referrerpolicy="no-referrer" />
             <div class="detail-meta">
               <p v-if="activeMangaDetail.author" class="meta-row"><strong>作者:</strong> {{ activeMangaDetail.author }}</p>
               <p v-if="activeMangaDetail.description" class="meta-desc">{{ activeMangaDetail.description }}</p>
