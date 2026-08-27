@@ -411,8 +411,11 @@ func (m *SourceManager) FetchPicaRank(ctx context.Context) []MangaSearchResult {
 		return nil
 	}
 
+	// Ensure login token is available
+	_ = picaSrc.ensureLogin(ctx)
+
 	// Try fetching 24H leaderboard
-	resp, err := picaSrc.doRequest(ctx, "GET", "/comics/leaderboard?tt=H24&ct=VC", nil)
+	resp, err := picaSrc.doRequest(ctx, "GET", "comics/leaderboard?tt=H24&ct=VC", nil)
 	if err != nil || resp.StatusCode != 200 {
 		if resp != nil {
 			resp.Body.Close()

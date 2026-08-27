@@ -21,7 +21,7 @@ import (
 
 const (
 	PicaAPIKey    = "C69BAF41DA5ABD1FFEDC6D2FEA56B"
-	PicaSecretKey = "~d}$Q7$eIni=V)9\\RK/P.RM4;9"
+	PicaSecretKey = `~d}$Q7$eIni=V)9\RK/P.RM4;9[7|@/CA}b~OW!3?EV`:<>M7pddUBL5n|0/*Cn`
 	PicaBaseURL   = "https://picaapi.picacomic.com"
 )
 
@@ -60,8 +60,12 @@ func generateNonce() string {
 }
 
 func (s *PicaSource) generateSignature(rawPath, timestamp, nonce, method string) string {
-	// Raw data: (path + time + nonce + method + apiKey) in lowercase
-	raw := rawPath + timestamp + nonce + method + s.apiKey
+	// Strip leading slash and query parameters before signing
+	cleanPath := strings.TrimPrefix(rawPath, "/")
+	if idx := strings.Index(cleanPath, "?"); idx != -1 {
+		cleanPath = cleanPath[:idx]
+	}
+	raw := cleanPath + timestamp + nonce + method + s.apiKey
 	raw = strings.ToLower(raw)
 
 	mac := hmac.New(sha256.New, []byte(s.secretKey))
