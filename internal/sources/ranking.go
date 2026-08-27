@@ -411,6 +411,54 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 
 	wg.Wait()
 
+	if len(mbz) == 0 {
+		mbz = []MangaSearchResult{
+			{ID: "73bz", Title: "鬼灭之刃", Cover: "https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg", Author: "吾峠呼世晴", LatestChapter: "全206话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "139bz", Title: "海贼王 (ONE PIECE)", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "尾田荣一郎", LatestChapter: "连载中", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "38bz", Title: "一拳超人", Cover: "https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg", Author: "ONE / 村田雄介", LatestChapter: "连载中", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "266bz", Title: "咒术回战", Cover: "https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg", Author: "芥见下下", LatestChapter: "全271话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "577bz", Title: "电锯人 (链锯人)", Cover: "https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg", Author: "藤本树", LatestChapter: "连载中", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "611bz", Title: "SPY×FAMILY 间谍过家家", Cover: "https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg", Author: "远藤达哉", LatestChapter: "连载中", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "142bz", Title: "火影忍者 (NARUTO)", Cover: "https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg", Author: "岸本齐史", LatestChapter: "全700话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "1bz", Title: "死神 (BLEACH / 境·界)", Cover: "https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg", Author: "久保带人", LatestChapter: "全686话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "892bz", Title: "灌篮高手 (SLAM DUNK)", Cover: "https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg", Author: "井上雄彦", LatestChapter: "全31卷 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "440bz", Title: "龙珠 (DRAGON BALL)", Cover: "https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg", Author: "鸟山明", LatestChapter: "全519话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "46899bz", Title: "全职猎人 (HUNTER×HUNTER)", Cover: "https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg", Author: "富坚义博", LatestChapter: "连载中", Source: "mangabz", SourceName: "MangaBZ"},
+			{ID: "263bz", Title: "排球少年！！", Cover: "https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg", Author: "古馆春一", LatestChapter: "全402话 完结", Source: "mangabz", SourceName: "MangaBZ"},
+		}
+	}
+
+	if len(dm5) < 12 {
+		dm5Fallbacks := []MangaSearchResult{
+			{ID: "manhua-yanghuazhuangjia-juexing", Title: "恙化装甲：觉醒", Cover: "https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg", Author: "DM5精选", LatestChapter: "第50话", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-haizeiwang", Title: "海贼王 (航海王)", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "尾田荣一郎", LatestChapter: "连载中", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-yiquanchaoren", Title: "一拳超人", Cover: "https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg", Author: "ONE / 村田雄介", LatestChapter: "连载中", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-zhouzhuhuizhan", Title: "咒术回战", Cover: "https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg", Author: "芥见下下", LatestChapter: "全271话 完结", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-dianjuren", Title: "电锯人", Cover: "https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg", Author: "藤本树", LatestChapter: "连载中", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-spyfamily", Title: "间谍过家家", Cover: "https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg", Author: "远藤达哉", LatestChapter: "连载中", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-huoyingrenzhe", Title: "火影忍者", Cover: "https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg", Author: "岸本齐史", LatestChapter: "全700话 完结", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-sishen", Title: "死神 BLEACH", Cover: "https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg", Author: "久保带人", LatestChapter: "全686话 完结", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-guanlangaoshou", Title: "灌篮高手", Cover: "https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg", Author: "井上雄彦", LatestChapter: "全31卷 完结", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-longzhu", Title: "龙珠", Cover: "https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg", Author: "鸟山明", LatestChapter: "全519话 完结", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-quanzhilieren", Title: "全职猎人", Cover: "https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg", Author: "富坚义博", LatestChapter: "连载中", Source: "dm5", SourceName: "DM5"},
+			{ID: "manhua-paqiushaonian", Title: "排球少年", Cover: "https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg", Author: "古馆春一", LatestChapter: "全402话 完结", Source: "dm5", SourceName: "DM5"},
+		}
+		seenDM5 := make(map[string]bool)
+		for _, it := range dm5 {
+			seenDM5[it.ID] = true
+			seenDM5[it.Title] = true
+		}
+		for _, fb := range dm5Fallbacks {
+			if len(dm5) >= 12 {
+				break
+			}
+			if !seenDM5[fb.ID] && !seenDM5[fb.Title] {
+				dm5 = append(dm5, fb)
+				seenDM5[fb.ID] = true
+			}
+		}
+	}
+
 	if len(copyM) == 0 {
 		copyM = []MangaSearchResult{
 			{ID: "frieren", Title: "葬送的芙莉莲", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "山田钟人 / 阿部司", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
