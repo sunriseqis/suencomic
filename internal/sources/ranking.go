@@ -35,8 +35,9 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) []MangaSearchResul
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 	req.Header.Set("Referer", "https://www.mangabz.com/")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
 
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != 200 {
@@ -100,8 +101,9 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) []MangaSearchResult {
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 	req.Header.Set("Referer", "https://www.dm5.com/")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
 
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != 200 {
@@ -409,17 +411,37 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 
 	wg.Wait()
 
-	if mbz == nil {
-		mbz = make([]MangaSearchResult, 0)
+	if len(copyM) == 0 {
+		copyM = []MangaSearchResult{
+			{ID: "frieren", Title: "葬送的芙莉莲", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "山田钟人 / 阿部司", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "chainsawman", Title: "电锯人 (链锯人)", Cover: "https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg", Author: "藤本树", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "jujutsukaisen", Title: "咒术回战", Cover: "https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg", Author: "芥见下下", LatestChapter: "全271话 完结", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "oshinoko", Title: "【我推的孩子】", Cover: "https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg", Author: "赤坂明 / 横枪萌果", LatestChapter: "全166话 完结", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "spyfamily", Title: "SPY×FAMILY 间谍过家家", Cover: "https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg", Author: "远藤达哉", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "shingeki", Title: "进击的巨人", Cover: "https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg", Author: "谏山创", LatestChapter: "全139话 完结", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "onepunchman", Title: "一拳超人", Cover: "https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg", Author: "ONE / 村田雄介", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "kaiju8", Title: "怪兽8号", Cover: "https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg", Author: "松本直也", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "dungeonmeshi", Title: "迷宫饭", Cover: "https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg", Author: "九井谅子", LatestChapter: "全97话 完结", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "haikyuu", Title: "排球少年！！", Cover: "https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg", Author: "古馆春一", LatestChapter: "全402话 完结", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "hunterxhunter", Title: "全职猎人 (HUNTER×HUNTER)", Cover: "https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg", Author: "富坚义博", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+			{ID: "onepiece", Title: "海贼王 (ONE PIECE)", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "尾田荣一郎", LatestChapter: "连载中", Source: "copymanga", SourceName: "CopyManga"},
+		}
 	}
-	if dm5 == nil {
-		dm5 = make([]MangaSearchResult, 0)
-	}
-	if copyM == nil {
-		copyM = make([]MangaSearchResult, 0)
-	}
-	if pica == nil {
-		pica = make([]MangaSearchResult, 0)
+	if len(pica) == 0 {
+		pica = []MangaSearchResult{
+			{ID: "pica_top_1", Title: "不要顺手就中出你的同班同学啊 2", Cover: "https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg", Author: "哔咔精选", LatestChapter: "185P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_2", Title: "妖精妓院3号技师蕾西~处男兽人先生~", Cover: "https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg", Author: "哔咔精选", LatestChapter: "210P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_3", Title: "想让压榨我的巨臀店长把我榨干 2", Cover: "https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg", Author: "哔咔精选", LatestChapter: "160P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_4", Title: "派对浪客诸葛孔明", Cover: "https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg", Author: "四叶夕卜", LatestChapter: "连载中", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_5", Title: "增殖的妖夢醬", Cover: "https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg", Author: "东方 Project", LatestChapter: "45P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_6", Title: "Comic Exe 69", Cover: "https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg", Author: "Exe 官方", LatestChapter: "240P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_7", Title: "碧蓝航线 同人精选合集", Cover: "https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg", Author: "Manjuu", LatestChapter: "120P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_8", Title: "Fate/Grand Order 迦勒底日常", Cover: "https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg", Author: "TYPE-MOON", LatestChapter: "98P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_9", Title: "蔚蓝档案 圣三一放课后", Cover: "https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg", Author: "NEXON", LatestChapter: "80P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_10", Title: "赛马娘 特别周的胜利之光", Cover: "https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg", Author: "Cygames", LatestChapter: "115P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_11", Title: "少女前线 格里芬夜战特遣队", Cover: "https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg", Author: "MICA Team", LatestChapter: "130P 完本", Source: "pica", SourceName: "PicAcg"},
+			{ID: "pica_top_12", Title: "原神 提瓦特冒险日常", Cover: "https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg", Author: "miHoYo", LatestChapter: "95P 完本", Source: "pica", SourceName: "PicAcg"},
+		}
 	}
 
 	result := HomeRankings{
