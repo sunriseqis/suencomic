@@ -74,7 +74,7 @@ func SetupRouter(
 				c.JSON(http.StatusBadRequest, gin.H{"code": 1, "error": "search keyword cannot be empty"})
 				return
 			}
-			searchCtx, cancel := context.WithTimeout(c.Request.Context(), 5500*time.Millisecond)
+			searchCtx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 			defer cancel()
 
 			sourceID := c.Query("source")

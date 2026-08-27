@@ -174,8 +174,8 @@ func (m *SourceManager) SearchAll(ctx context.Context, keyword string) []MangaSe
 	var mu sync.Mutex
 	var allResults []MangaSearchResult
 
-	// Hard 4-second timeout for aggregated search across all sources
-	searchCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	// 15-second timeout for aggregated search across all sources
+	searchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	for _, src := range sources {
@@ -446,9 +446,7 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 	}
 
 	if !hasProxy {
-		if http.ProxyFromEnvironment != nil {
-			directTransport.Proxy = http.ProxyFromEnvironment
-		}
+		directTransport.Proxy = http.ProxyFromEnvironment
 		return &http.Client{
 			Transport: directTransport,
 			Timeout:   timeout,

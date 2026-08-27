@@ -184,7 +184,14 @@
               @click="openMangaDetail(item)"
             >
               <div class="manga-cover-wrap">
-                <img :src="item.cover || 'https://via.placeholder.com/200x280?text=No+Cover'" class="manga-cover" alt="cover" loading="lazy" referrerpolicy="no-referrer" />
+                <img 
+                  :src="item.cover || ''" 
+                  class="manga-cover" 
+                  alt="cover" 
+                  loading="lazy" 
+                  referrerpolicy="no-referrer"
+                  @error="$event.target.style.opacity = '0.6'"
+                />
                 <span class="rank-badge mono" :class="{ 'top-three': idx < 3 }">TOP {{ idx + 1 }}</span>
                 <span class="source-tag" :class="'src-' + item.source">{{ item.source_name }}</span>
               </div>
@@ -199,8 +206,17 @@
             </div>
           </div>
 
-          <div v-else class="empty-box">
-            <p class="mono">暂无热榜数据，正在自动重试...</p>
+          <div v-else class="empty-box bh-card error-card">
+            <div class="error-badge-row">
+              <span class="bh-badge bh-badge-red mono">⚠️ 实时获取失败 / SOURCE OFFLINE</span>
+            </div>
+            <h4 class="error-source-title">{{ activeTabObj.name }}</h4>
+            <p class="error-source-msg mono">{{ currentTabError || '源站点暂时无法访问，可能受网络、反爬或代理限制。' }}</p>
+            <div style="margin-top: 16px;">
+              <button class="bh-btn bh-btn-sm bh-btn-yellow" @click="loadHomeData(true)">
+                重新拉取数据
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -258,6 +274,16 @@
         <div v-if="searching" class="loading-box bh-card">
           <div class="bh-loader"></div>
           <p class="mono">正在向各大漫画源并发检索漫画数据...</p>
+        </div>
+
+        <div v-else-if="searchError" class="empty-box bh-card error-card">
+          <span class="bh-badge bh-badge-red mono">⚠️ 检索失败 / SEARCH ERROR</span>
+          <p class="error-source-msg mono" style="margin-top: 8px;">{{ searchError }}</p>
+          <div style="margin-top: 12px;">
+            <button class="bh-btn bh-btn-sm bh-btn-yellow" @click="handleSearch">
+              重试搜索
+            </button>
+          </div>
         </div>
 
         <div v-else-if="hasSearched && searchResults.length === 0" class="empty-box bh-card">
@@ -752,71 +778,17 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const currentTab = ref('home')
 
-const defaultMangaBZ = [
-  { id: '73bz', title: '鬼灭之刃', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: '吾峠呼世晴', latest_chapter: '全206话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '139bz', title: '海贼王 (ONE PIECE)', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '尾田荣一郎', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '38bz', title: '一拳超人', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: 'ONE / 村田雄介', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '266bz', title: '咒术回战', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '芥见下下', latest_chapter: '全271话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '577bz', title: '电锯人 (链锯人)', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '藤本树', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '611bz', title: 'SPY×FAMILY 间谍过家家', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '远藤达哉', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '142bz', title: '火影忍者 (NARUTO)', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: '岸本齐史', latest_chapter: '全700话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '1bz', title: '死神 (BLEACH / 境·界)', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: '久保带人', latest_chapter: '全686话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '892bz', title: '灌篮高手 (SLAM DUNK)', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: '井上雄彦', latest_chapter: '全31卷 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '440bz', title: '龙珠 (DRAGON BALL)', cover: 'https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg', author: '鸟山明', latest_chapter: '全519话 完结', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '46899bz', title: '全职猎人 (HUNTER×HUNTER)', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: '富坚义博', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
-  { id: '263bz', title: '排球少年！！', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: '古馆春一', latest_chapter: '全402话 完结', source: 'mangabz', source_name: 'MangaBZ' }
-]
-
-const defaultDM5 = [
-  { id: 'manhua-yanghuazhuangjia-juexing', title: '恙化装甲：觉醒', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: 'DM5精选', latest_chapter: '第50话', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-haizeiwang', title: '海贼王 (航海王)', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '尾田荣一郎', latest_chapter: '连载中', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-yiquanchaoren', title: '一拳超人', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: 'ONE / 村田雄介', latest_chapter: '连载中', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-zhouzhuhuizhan', title: '咒术回战', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '芥见下下', latest_chapter: '全271话 完结', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-dianjuren', title: '电锯人', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '藤本树', latest_chapter: '连载中', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-spyfamily', title: '间谍过家家', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '远藤达哉', latest_chapter: '连载中', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-huoyingrenzhe', title: '火影忍者', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: '岸本齐史', latest_chapter: '全700话 完结', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-sishen', title: '死神 BLEACH', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: '久保带人', latest_chapter: '全686话 完结', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-guanlangaoshou', title: '灌篮高手', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: '井上雄彦', latest_chapter: '全31卷 完结', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-longzhu', title: '龙珠', cover: 'https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg', author: '鸟山明', latest_chapter: '全519话 完结', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-quanzhilieren', title: '全职猎人', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: '富坚义博', latest_chapter: '连载中', source: 'dm5', source_name: 'DM5' },
-  { id: 'manhua-paqiushaonian', title: '排球少年', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: '古馆春一', latest_chapter: '全402话 完结', source: 'dm5', source_name: 'DM5' }
-]
-
-const defaultCopyManga = [
-  { id: 'frieren', title: '葬送的芙莉莲', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '山田钟人 / 阿部司', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'chainsawman', title: '电锯人 (链锯人)', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '藤本树', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'jujutsukaisen', title: '咒术回战', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '芥见下下', latest_chapter: '全271话 完结', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'oshinoko', title: '【我推的孩子】', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: '赤坂明 / 横枪萌果', latest_chapter: '全166话 完结', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'spyfamily', title: 'SPY×FAMILY 间谍过家家', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '远藤达哉', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'shingeki', title: '进击的巨人', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: '谏山创', latest_chapter: '全139话 完结', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'onepunchman', title: '一拳超人', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: 'ONE / 村田雄介', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'kaiju8', title: '怪兽8号', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: '松本直也', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'dungeonmeshi', title: '迷宫饭', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: '九井谅子', latest_chapter: '全97话 完结', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'haikyuu', title: '排球少年！！', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: '古馆春一', latest_chapter: '全402话 完结', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'hunterxhunter', title: '全职猎人 (HUNTER×HUNTER)', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: '富坚义博', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' },
-  { id: 'onepiece', title: '海贼王 (ONE PIECE)', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '尾田荣一郎', latest_chapter: '连载中', source: 'copymanga', source_name: 'CopyManga' }
-]
-
-const defaultPica = [
-  { id: 'pica_top_1', title: '不要顺手就中出你的同班同学啊 2', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: '哔咔精选', latest_chapter: '185P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_2', title: '妖精妓院3号技师蕾西~处男兽人先生~', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '哔咔精选', latest_chapter: '210P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_3', title: '想让压榨我的巨臀店长把我榨干 2', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: '哔咔精选', latest_chapter: '160P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_4', title: '派对浪客诸葛孔明', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '四叶夕卜', latest_chapter: '连载中', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_5', title: '增殖的妖夢醬', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '东方 Project', latest_chapter: '45P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_6', title: 'Comic Exe 69', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: 'Exe 官方', latest_chapter: '240P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_7', title: '碧蓝航线 同人精选合集', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: 'Manjuu', latest_chapter: '120P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_8', title: 'Fate/Grand Order 迦勒底日常', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: 'TYPE-MOON', latest_chapter: '98P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_9', title: '蔚蓝档案 圣三一放课后', cover: 'https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg', author: 'NEXON', latest_chapter: '80P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_10', title: '赛马娘 特别周的胜利之光', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: 'Cygames', latest_chapter: '115P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_11', title: '少女前线 格里芬夜战特遣队', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: 'MICA Team', latest_chapter: '130P 完本', source: 'pica', source_name: 'PicAcg' },
-  { id: 'pica_top_12', title: '原神 提瓦特冒险日常', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: 'miHoYo', latest_chapter: '95P 完本', source: 'pica', source_name: 'PicAcg' }
-]
-
 const homeData = ref({
-  mangabz: [...defaultMangaBZ],
-  dm5: [...defaultDM5],
-  copymanga: [...defaultCopyManga],
-  pica: [...defaultPica]
+  mangabz: [],
+  dm5: [],
+  copymanga: [],
+  pica: []
+})
+const homeErrors = ref({
+  mangabz: '',
+  dm5: '',
+  copymanga: '',
+  pica: ''
 })
 const loadingHome = ref(false)
 const activeHomeSource = ref('mangabz')
@@ -837,11 +809,16 @@ const currentHomeList = computed(() => {
   return homeData.value[activeHomeSource.value] || []
 })
 
+const currentTabError = computed(() => {
+  return homeErrors.value[activeHomeSource.value] || ''
+})
+
 const searchQuery = ref('')
 const searchSource = ref('all')
 const searching = ref(false)
 const hasSearched = ref(false)
 const searchResults = ref([])
+const searchError = ref('')
 
 const speedResults = ref([
   { source_id: 'mangabz', source_name: 'MangaBZ (漫画BZ)', latency_ms: 65, available: true, is_fastest: true },
@@ -929,15 +906,21 @@ const displayedChapters = computed(() => {
 })
 
 // Methods
-async function loadHomeData() {
+async function loadHomeData(force = false) {
+  loadingHome.value = true
   try {
     const res = await fetch('/api/home')
     const json = await res.json()
     if (json.code === 0 && json.data) {
-      if (json.data.mangabz && json.data.mangabz.length > 0) homeData.value.mangabz = json.data.mangabz
-      if (json.data.dm5 && json.data.dm5.length > 0) homeData.value.dm5 = json.data.dm5
-      if (json.data.copymanga && json.data.copymanga.length > 0) homeData.value.copymanga = json.data.copymanga
-      if (json.data.pica && json.data.pica.length > 0) homeData.value.pica = json.data.pica
+      homeData.value.mangabz = json.data.mangabz || []
+      homeData.value.dm5 = json.data.dm5 || []
+      homeData.value.copymanga = json.data.copymanga || []
+      homeData.value.pica = json.data.pica || []
+
+      homeErrors.value.mangabz = json.data.mangabz_err || ''
+      homeErrors.value.dm5 = json.data.dm5_err || ''
+      homeErrors.value.copymanga = json.data.copymanga_err || ''
+      homeErrors.value.pica = json.data.pica_err || ''
     }
   } catch (err) {
     console.error('Load home error:', err)
@@ -966,22 +949,25 @@ async function handleSearch() {
   searching.value = true
   hasSearched.value = true
   searchResults.value = []
+  searchError.value = ''
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
+  const timeoutId = setTimeout(() => controller.abort(), 20000)
 
   try {
     const url = `/api/search?q=${encodeURIComponent(searchQuery.value.trim())}&source=${searchSource.value}`
     const res = await fetch(url, { signal: controller.signal })
     const json = await res.json()
-    if (json.code === 0 && json.data) {
+    if (json.code === 0 && Array.isArray(json.data)) {
       searchResults.value = json.data
+    } else if (json.error) {
+      searchError.value = json.error
     }
   } catch (err) {
     if (err.name === 'AbortError') {
-      console.warn('Search timed out after 8s')
+      searchError.value = '搜索请求超时 (20秒)，请检查代理或切换单个漫画源重试'
     } else {
-      console.error('Search error:', err)
+      searchError.value = '搜索请求出错: ' + err.message
     }
   } finally {
     clearTimeout(timeoutId)
