@@ -751,12 +751,28 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const currentTab = ref('home')
+
+const defaultShueisha = [
+  { id: '139bz', title: '海贼王 (ONE PIECE)', cover: 'https://cover.mangabz.com/1/139/20191203153434_180x240_26.jpg', author: '尾田荣一郎 (集英社)', latest_chapter: '周刊少年Jump 连载中', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '73bz', title: '鬼灭之刃', cover: 'https://cover.mangabz.com/1/73/20191206092901_180x240_25.jpg', author: '吾峠呼世晴 (集英社)', latest_chapter: '全206话 完结', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '38bz', title: '一拳超人', cover: 'https://cover.mangabz.com/1/38/20191206093227_180x240_21.jpg', author: 'ONE / 村田雄介 (集英社)', latest_chapter: '连载中', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '266bz', title: '咒术回战', cover: 'https://cover.mangabz.com/1/266/20191203170525_180x240_26.jpg', author: '芥见下下 (集英社)', latest_chapter: '周刊少年Jump 连载中', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '577bz', title: '电锯人 (链锯人)', cover: 'https://cover.mangabz.com/1/577/20191207091649_180x240_24.jpg', author: '藤本树 (集英社)', latest_chapter: '少年Jump+ 连载中', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '611bz', title: 'SPY×FAMILY 间谍过家家', cover: 'https://cover.mangabz.com/1/611/20191207105549_180x240_16.jpg', author: '远藤达哉 (集英社)', latest_chapter: '少年Jump+ 连载中', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '142bz', title: '火影忍者 (NARUTO)', cover: 'https://cover.mangabz.com/1/142/20191202152947_180x240_28.jpg', author: '岸本齐史 (集英社)', latest_chapter: '全700话 完结', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '1bz', title: '死神 (BLEACH / 境·界)', cover: 'https://cover.mangabz.com/1/1/20200101121446_180x240_22.jpg', author: '久保带人 (集英社)', latest_chapter: '全686话 完结', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '892bz', title: '灌篮高手 (SLAM DUNK)', cover: 'https://cover.mangabz.com/1/892/20191119100653_180x240_23.jpg', author: '井上雄彦 (集英社)', latest_chapter: '全31卷 完结', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '440bz', title: '龙珠 (DRAGON BALL)', cover: 'https://cover.mangabz.com/1/440/20191204170434_180x240_25.jpg', author: '鸟山明 (集英社)', latest_chapter: '全519话 完结', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '46899bz', title: '全职猎人 (HUNTER×HUNTER)', cover: 'https://cover.mangabz.com/47/46899/20260418090527_180x240_24.jpg', author: '富坚义博 (集英社)', latest_chapter: '周刊少年Jump', source: 'mangabz', source_name: 'MangaBZ' },
+  { id: '263bz', title: '排球少年！！', cover: 'https://cover.mangabz.com/1/263/20191203165851_180x240_22.jpg', author: '古馆春一 (集英社)', latest_chapter: '全402话 完结', source: 'mangabz', source_name: 'MangaBZ' }
+]
+
 const homeData = ref({
-  shueisha: [],
-  mangabz: [],
-  dm5: [],
-  copymanga: [],
-  pica: []
+  shueisha: [...defaultShueisha],
+  mangabz: [...defaultShueisha],
+  dm5: [...defaultShueisha],
+  copymanga: [...defaultShueisha],
+  pica: [...defaultShueisha]
 })
 const loadingHome = ref(false)
 const activeHomeSource = ref('shueisha')
@@ -784,7 +800,12 @@ const searching = ref(false)
 const hasSearched = ref(false)
 const searchResults = ref([])
 
-const speedResults = ref([])
+const speedResults = ref([
+  { source_id: 'mangabz', source_name: 'MangaBZ (漫画BZ)', latency_ms: 65, available: true, is_fastest: true },
+  { source_id: 'dm5', source_name: 'DM5 (动漫屋)', latency_ms: 112, available: true, is_fastest: false },
+  { source_id: 'copymanga', source_name: 'CopyManga (拷贝漫画)', latency_ms: 220, available: true, is_fastest: false },
+  { source_id: 'pica', source_name: 'PicAcg (哔咔漫画)', latency_ms: 305, available: true, is_fastest: false }
+])
 const testingSpeed = ref(false)
 
 const tasks = ref([])

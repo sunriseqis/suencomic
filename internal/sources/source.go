@@ -119,6 +119,9 @@ func (m *SourceManager) ListSources() []MangaSource {
 }
 
 func (m *SourceManager) TestAll(ctx context.Context) []SpeedTestResult {
+	testCtx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
 	sources := m.ListSources()
 	results := make([]SpeedTestResult, len(sources))
 	var wg sync.WaitGroup
@@ -128,7 +131,7 @@ func (m *SourceManager) TestAll(ctx context.Context) []SpeedTestResult {
 		go func(idx int, s MangaSource) {
 			defer wg.Done()
 			start := time.Now()
-			dur, err := s.Ping(ctx)
+			dur, err := s.Ping(testCtx)
 			latency := dur.Milliseconds()
 			if latency == 0 {
 				latency = time.Since(start).Milliseconds()
@@ -357,12 +360,8 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 		return t.proxyTransport.RoundTrip(req)
 	}
 
-	// 1. Try Direct Connection First with isolated short probe timeout (1.5s)
-	directCtx, cancel := context.WithTimeout(req.Context(), 1500*time.Millisecond)
-	directReq := req.Clone(directCtx)
-	resp, err := t.directTransport.RoundTrip(directReq)
-	cancel()
-
+	// 1. Try Direct Connection First (governed by directTransport dial & header timeouts)
+	resp, err := t.directTransport.RoundTrip(req)
 	if err == nil && resp != nil && resp.StatusCode < 500 && resp.StatusCode != http.StatusForbidden {
 		markDomainDirectOk(host)
 		return resp, nil
@@ -371,7 +370,7 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 	// Direct failed or blocked -> remember domain for 10 minutes to avoid probe delays
 	markDomainNeedsProxy(host)
 
-	// 2. Seamless fallback to Proxy with parent context
+	// 2. Seamless fallback to Proxy
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
