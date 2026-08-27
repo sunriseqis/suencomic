@@ -161,6 +161,19 @@ func (s *PicaSource) ensureLogin(ctx context.Context) error {
 	return nil
 }
 
+func (s *PicaSource) doRequest(ctx context.Context, method, rawPath string, body io.Reader) (*http.Response, error) {
+	cleanPath := strings.TrimPrefix(rawPath, "/")
+	fullURL := s.baseURL + "/" + cleanPath
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
+	if err != nil {
+		return nil, err
+	}
+	s.setHeaders(req, cleanPath)
+
+	client := CreateHTTPClient(8 * time.Second)
+	return client.Do(req)
+}
+
 func (s *PicaSource) Ping(ctx context.Context) (time.Duration, error) {
 	start := time.Now()
 	client := CreateHTTPClient(3 * time.Second)
