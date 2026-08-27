@@ -86,7 +86,6 @@ func InitManager() *SourceManager {
 	mgr.Register(NewCopyMangaSource())
 	mgr.Register(NewDM5Source())
 	mgr.Register(NewMangaBZSource())
-	mgr.Register(NewPicaSource())
 
 	DefaultManager = mgr
 	return mgr
@@ -319,7 +318,10 @@ func cleanChapterTitle(title string) string {
 
 var (
 	proxyRouteMu     sync.RWMutex
-	domainNeedsProxy = make(map[string]time.Time)
+	domainNeedsProxy = map[string]time.Time{
+		"api.copymanga.tv":  time.Now().Add(365 * 24 * time.Hour),
+		"api.copymanga.org": time.Now().Add(365 * 24 * time.Hour),
+	}
 )
 
 func isDomainProxyOnly(host string) bool {

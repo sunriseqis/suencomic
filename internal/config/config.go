@@ -17,8 +17,6 @@ type Config struct {
 	CheckIntervalMinutes  int    `json:"check_interval_minutes"`
 	DefaultFormat         string `json:"default_format"` // "raw", "pdf", "cbz", "epub"
 	Port                  int    `json:"port"`
-	PicaAccount           string `json:"pica_account"`
-	PicaPassword          string `json:"pica_password"`
 }
 
 var (

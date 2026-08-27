@@ -32,7 +32,7 @@ func main() {
 
 	fmt.Println("==================================================")
 	fmt.Println("       SUENCOMIC // 多源漫画下载平台")
-	fmt.Println("  Sources: CopyManga | DM5 | MangaBZ | PicAcg (哔咔)")
+	fmt.Println("  Sources: CopyManga | DM5 | MangaBZ")
 	fmt.Println("  Speed Benchmarking & Intelligent Auto-Fallback")
 	fmt.Println("==================================================")
 
@@ -48,7 +48,7 @@ func main() {
 
 	// 2. Initialize Source Manager
 	sourceMgr := sources.InitManager()
-	fmt.Println("[SOURCES] Registered CopyManga, DM5, MangaBZ, PicAcg (哔咔) scrapers.")
+	fmt.Println("[SOURCES] Registered CopyManga, DM5, MangaBZ scrapers.")
 
 	// 3. Initialize Downloader Manager
 	dlMgr := downloader.InitManager(sourceMgr)

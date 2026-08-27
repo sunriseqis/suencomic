@@ -18,11 +18,9 @@ type HomeRankings struct {
 	MangaBZ      []MangaSearchResult `json:"mangabz"`
 	DM5          []MangaSearchResult `json:"dm5"`
 	CopyManga    []MangaSearchResult `json:"copymanga"`
-	Pica         []MangaSearchResult `json:"pica"`
 	MangaBZErr   string              `json:"mangabz_err,omitempty"`
 	DM5Err       string              `json:"dm5_err,omitempty"`
 	CopyMangaErr string              `json:"copymanga_err,omitempty"`
-	PicaErr      string              `json:"pica_err,omitempty"`
 }
 
 var (
@@ -306,90 +304,7 @@ func (m *SourceManager) FetchCopyMangaRank(ctx context.Context) ([]MangaSearchRe
 	return results, nil
 }
 
-// FetchPicaRank fetches top 12 popular/leaderboard manga from PicAcg (哔咔)
-func (m *SourceManager) FetchPicaRank(ctx context.Context) ([]MangaSearchResult, error) {
-	src, ok := m.GetSource("pica")
-	if !ok {
-		return nil, fmt.Errorf("哔咔漫画源未注册")
-	}
-
-	picaSrc, ok := src.(*PicaSource)
-	if !ok {
-		return nil, fmt.Errorf("无效的哔咔漫画源实例")
-	}
-
-	if err := picaSrc.ensureLogin(ctx); err != nil {
-		return nil, fmt.Errorf("哔咔认证失败: %w", err)
-	}
-
-	resp, err := picaSrc.doRequest(ctx, "GET", "comics/leaderboard?tt=H24&ct=VC", nil)
-	if err != nil {
-		return nil, fmt.Errorf("获取哔咔排行榜失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("哔咔返回状态码 %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取哔咔响应失败: %w", err)
-	}
-
-	var data struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    struct {
-			Comics []struct {
-				ID         string `json:"_id"`
-				Title      string `json:"title"`
-				Author     string `json:"author"`
-				Thumb      struct {
-					FileServer string `json:"fileServer"`
-					Path       string `json:"path"`
-				} `json:"thumb"`
-				PagesCount int `json:"pagesCount"`
-			} `json:"comics"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &data); err != nil {
-		return nil, fmt.Errorf("解析哔咔 JSON 失败: %w", err)
-	}
-
-	var results []MangaSearchResult
-	for _, c := range data.Data.Comics {
-		if len(results) >= 12 {
-			break
-		}
-		cover := ""
-		if c.Thumb.FileServer != "" && c.Thumb.Path != "" {
-			cover = fmt.Sprintf("%s/static/%s", strings.TrimRight(c.Thumb.FileServer, "/"), strings.TrimLeft(c.Thumb.Path, "/"))
-		}
-		author := c.Author
-		if author == "" {
-			author = "哔咔精选"
-		}
-		results = append(results, MangaSearchResult{
-			ID:            c.ID,
-			Title:         c.Title,
-			Cover:         cover,
-			Author:        author,
-			LatestChapter: fmt.Sprintf("%dP 完本", c.PagesCount),
-			Source:        "pica",
-			SourceName:    "PicAcg",
-		})
-	}
-
-	if len(results) == 0 {
-		return nil, fmt.Errorf("哔咔返回列表为空 (%s)", data.Message)
-	}
-
-	return results, nil
-}
-
-// GetHomeData compiles the homepage ranking across 4 major sources in real-time
+// GetHomeData compiles the homepage ranking across 3 major sources in real-time
 func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	homeCacheMu.RLock()
 	if time.Since(homeCacheTime) < 5*time.Minute && (len(homeCacheData.MangaBZ) > 0 || len(homeCacheData.DM5) > 0) {
@@ -400,13 +315,13 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	homeCacheMu.RUnlock()
 
 	var wg sync.WaitGroup
-	var mbz, dm5, copyM, pica []MangaSearchResult
-	var mbzErr, dm5Err, copyErr, picaErr error
+	var mbz, dm5, copyM []MangaSearchResult
+	var mbzErr, dm5Err, copyErr error
 
 	// Each source gets its OWN 18s context — one slow/failing source won't cancel the others
 	perSourceTimeout := 18 * time.Second
 
-	wg.Add(4)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
@@ -424,12 +339,6 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
 		defer sCancel()
 		copyM, copyErr = m.FetchCopyMangaRank(sCtx)
-	}()
-	go func() {
-		defer wg.Done()
-		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
-		defer sCancel()
-		pica, picaErr = m.FetchPicaRank(sCtx)
 	}()
 
 	// Wait for all goroutines, but cap the overall blocking at 20s
@@ -453,15 +362,11 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	if copyM == nil {
 		copyM = make([]MangaSearchResult, 0)
 	}
-	if pica == nil {
-		pica = make([]MangaSearchResult, 0)
-	}
 
 	result := HomeRankings{
 		MangaBZ:   mbz,
 		DM5:       dm5,
 		CopyManga: copyM,
-		Pica:      pica,
 	}
 	if mbzErr != nil {
 		result.MangaBZErr = mbzErr.Error()
@@ -471,9 +376,6 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	}
 	if copyErr != nil {
 		result.CopyMangaErr = copyErr.Error()
-	}
-	if picaErr != nil {
-		result.PicaErr = picaErr.Error()
 	}
 
 	homeCacheMu.Lock()

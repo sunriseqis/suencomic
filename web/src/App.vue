@@ -136,8 +136,8 @@
         <div class="home-hero bh-card">
           <div class="hero-text">
             <span class="bh-badge bh-badge-red mono">// MULTI-SOURCE TOP CHARTS</span>
-            <h2 class="hero-title">四大漫画源全网实时热门榜单</h2>
-            <p class="hero-desc">实时聚合 MangaBZ、动漫屋 (DM5)、拷贝漫画、哔咔漫画四大源站点热门榜单，支持分源切换、极速解析与一键导出 PDF/CBZ/EPUB。</p>
+            <h2 class="hero-title">三大漫画源全网实时热门榜单</h2>
+            <p class="hero-desc">实时聚合 MangaBZ、动漫屋 (DM5)、拷贝漫画三大源站点热门榜单，支持分源切换、极速解析与一键导出 PDF/CBZ/EPUB。</p>
           </div>
           <button class="bh-btn bh-btn-primary hero-btn" @click="currentTab = 'search'">
             探索漫画全库
@@ -247,11 +247,6 @@
                 :class="{ active: searchSource === 'mangabz' }" 
                 @click="searchSource = 'mangabz'"
               >MangaBZ (漫画BZ)</span>
-              <span 
-                class="filter-pill" 
-                :class="{ active: searchSource === 'pica' }" 
-                @click="searchSource = 'pica'"
-              >PicAcg (哔咔)</span>
             </div>
           </div>
 
@@ -558,17 +553,6 @@
 
           <div class="form-grid-2">
             <div class="form-group">
-              <label class="form-label mono">PICACG ACCOUNT (哔咔漫画账号/邮箱):</label>
-              <input v-model="appConfig.pica_account" type="text" class="bh-input" placeholder="输入哔咔注册邮箱" />
-            </div>
-            <div class="form-group">
-              <label class="form-label mono">PICACG PASSWORD (哔咔漫画密码):</label>
-              <input v-model="appConfig.pica_password" type="password" class="bh-input" placeholder="输入哔咔登录密码" />
-            </div>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-group">
               <label class="form-label mono">MAX CONCURRENT CHAPTERS (最大并发话数):</label>
               <input v-model.number="appConfig.max_concurrent_chapters" type="number" min="1" max="10" class="bh-input" />
             </div>
@@ -781,14 +765,12 @@ const currentTab = ref('home')
 const homeData = ref({
   mangabz: [],
   dm5: [],
-  copymanga: [],
-  pica: []
+  copymanga: []
 })
 const homeErrors = ref({
   mangabz: '',
   dm5: '',
-  copymanga: '',
-  pica: ''
+  copymanga: ''
 })
 const loadingHome = ref(false)
 const activeHomeSource = ref('mangabz')
@@ -797,7 +779,6 @@ const homeSourceTabs = [
   { id: 'mangabz', name: '漫画BZ (MangaBZ) 热门榜', badge: '实时 TOP 12', color: 'blue', desc: '全站综合人气热度最高作品，支持一键极速解析' },
   { id: 'dm5', name: '动漫屋 (DM5) 热门榜', badge: '实时 TOP 12', color: 'yellow', desc: '动漫屋实时飙升排行与人气长青神作' },
   { id: 'copymanga', name: '拷贝漫画 (CopyManga) 热门榜', badge: '周榜 TOP 12', color: 'blue', desc: '全网超高人气、连载更新最前沿的高清漫画' },
-  { id: 'pica', name: '哔咔漫画 (PicAcg) 精选榜', badge: '24H TOP 12', color: 'red', desc: '哔咔漫画全本完结与同人经典排行榜' },
 ]
 
 const activeTabObj = computed(() => {
@@ -823,8 +804,7 @@ const searchError = ref('')
 const speedResults = ref([
   { source_id: 'mangabz', source_name: 'MangaBZ (漫画BZ)', latency_ms: 65, available: true, is_fastest: true },
   { source_id: 'dm5', source_name: 'DM5 (动漫屋)', latency_ms: 112, available: true, is_fastest: false },
-  { source_id: 'copymanga', source_name: 'CopyManga (拷贝漫画)', latency_ms: 220, available: true, is_fastest: false },
-  { source_id: 'pica', source_name: 'PicAcg (哔咔漫画)', latency_ms: 305, available: true, is_fastest: false }
+  { source_id: 'copymanga', source_name: 'CopyManga (拷贝漫画)', latency_ms: 220, available: true, is_fastest: false }
 ])
 const testingSpeed = ref(false)
 
@@ -841,9 +821,7 @@ const appConfig = ref({
   max_concurrent_images: 5,
   default_format: 'pdf',
   check_interval_minutes: 60,
-  auto_fallback: true,
-  pica_account: '',
-  pica_password: ''
+  auto_fallback: true
 })
 
 // Modal states
@@ -915,12 +893,10 @@ async function loadHomeData(force = false) {
       homeData.value.mangabz = json.data.mangabz || []
       homeData.value.dm5 = json.data.dm5 || []
       homeData.value.copymanga = json.data.copymanga || []
-      homeData.value.pica = json.data.pica || []
 
       homeErrors.value.mangabz = json.data.mangabz_err || ''
       homeErrors.value.dm5 = json.data.dm5_err || ''
       homeErrors.value.copymanga = json.data.copymanga_err || ''
-      homeErrors.value.pica = json.data.pica_err || ''
     }
   } catch (err) {
     console.error('Load home error:', err)
@@ -1819,7 +1795,6 @@ onUnmounted(() => {
 .source-tag.src-copymanga { background: var(--bh-blue); }
 .source-tag.src-dm5 { background: var(--bh-red); }
 .source-tag.src-mangabz { background: var(--bh-yellow); color: var(--bh-black); }
-.source-tag.src-pica { background: #E91E63; color: var(--bh-white); }
 
 .latency-tag {
   position: absolute;
