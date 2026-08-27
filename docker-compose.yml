@@ -9,6 +9,13 @@ services:
     restart: unless-stopped
     ports:
       - "8090:8090"
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PORT=8090
       - TZ=Asia/Shanghai
