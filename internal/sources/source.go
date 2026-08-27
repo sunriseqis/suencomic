@@ -391,9 +391,7 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 	}
 	cfg := config.Get()
 	directDialer := &net.Dialer{
-		// Short direct dial timeout: in Docker/restricted envs, direct connection to foreign
-		// sites quickly fails and we rely on proxy fallback. 1.5s is enough to confirm
-		// connectivity without blocking proxy fallback too long.
+		// Short direct dial: quickly confirm unreachable and fall through to proxy
 		Timeout:   1500 * time.Millisecond,
 		KeepAlive: 30 * time.Second,
 	}
@@ -420,15 +418,17 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 		if err == nil {
 			hasProxy = true
 			proxyDialer := &net.Dialer{
-				Timeout:   10 * time.Second,
+				// Proxy dial: 6s is enough even for slow HTTPS proxies
+				Timeout:   6 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			proxyTransport = &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
-				TLSHandshakeTimeout:   8 * time.Second,
-				ResponseHeaderTimeout: 12 * time.Second,
+				// Keep these generous but capped so total stays ~15s (6+4+8)
+				TLSHandshakeTimeout:   4 * time.Second,
+				ResponseHeaderTimeout: 8 * time.Second,
 				DisableKeepAlives:     false,
 				MaxIdleConns:          100,
 				IdleConnTimeout:       90 * time.Second,

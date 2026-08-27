@@ -33,7 +33,7 @@ var (
 
 // FetchMangaBZRank fetches top 12 real-time popular manga from MangaBZ
 func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResult, error) {
-	client := CreateHTTPClient(20 * time.Second)
+	client := CreateHTTPClient(18 * time.Second)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.mangabz.com/manga-list-0-0-10-p1/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
@@ -64,9 +64,19 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResu
 		if len(results) >= 12 {
 			return
 		}
-		tLink := sel.Find(".title a, h2.title a, a").First()
+		// Title link is inside h2.title > a, NOT the bare cover anchor (which wraps <img>)
+		tLink := sel.Find("h2.title a, .mh-item-detali .title a").First()
 		title := strings.TrimSpace(tLink.Text())
+		if title == "" {
+			// fallback: try the title attribute
+			title, _ = tLink.Attr("title")
+			title = strings.TrimSpace(title)
+		}
 		href, _ := tLink.Attr("href")
+		if href == "" {
+			// fallback: cover anchor href (e.g. /73bz/)
+			href, _ = sel.Find("a").First().Attr("href")
+		}
 		if title == "" || href == "" {
 			return
 		}
@@ -82,7 +92,7 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResu
 		if author == "" {
 			author = "热门精选"
 		}
-		latest := strings.TrimSpace(sel.Find(".chapter a, .title a:nth-child(2)").Text())
+		latest := strings.TrimSpace(sel.Find(".chapter a").Text())
 
 		results = append(results, MangaSearchResult{
 			ID:            id,
@@ -389,31 +399,50 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	}
 	homeCacheMu.RUnlock()
 
-	fetchCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-
 	var wg sync.WaitGroup
 	var mbz, dm5, copyM, pica []MangaSearchResult
 	var mbzErr, dm5Err, copyErr, picaErr error
 
+	// Each source gets its OWN 18s context — one slow/failing source won't cancel the others
+	perSourceTimeout := 18 * time.Second
+
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		mbz, mbzErr = m.FetchMangaBZRank(fetchCtx)
+		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
+		defer sCancel()
+		mbz, mbzErr = m.FetchMangaBZRank(sCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		dm5, dm5Err = m.FetchDM5Rank(fetchCtx)
+		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
+		defer sCancel()
+		dm5, dm5Err = m.FetchDM5Rank(sCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		copyM, copyErr = m.FetchCopyMangaRank(fetchCtx)
+		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
+		defer sCancel()
+		copyM, copyErr = m.FetchCopyMangaRank(sCtx)
 	}()
 	go func() {
 		defer wg.Done()
-		pica, picaErr = m.FetchPicaRank(fetchCtx)
+		sCtx, sCancel := context.WithTimeout(context.Background(), perSourceTimeout)
+		defer sCancel()
+		pica, picaErr = m.FetchPicaRank(sCtx)
 	}()
-	wg.Wait()
+
+	// Wait for all goroutines, but cap the overall blocking at 20s
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		// Some sources timed out internally; proceed with whatever we have
+	}
 
 	if mbz == nil {
 		mbz = make([]MangaSearchResult, 0)
