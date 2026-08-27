@@ -174,7 +174,7 @@ func (s *PicaSource) doRequest(ctx context.Context, method, rawPath string, body
 	}
 	s.setHeaders(req, cleanPath)
 
-	client := CreateHTTPClient(8 * time.Second)
+	client := CreateHTTPClient(18 * time.Second)
 	return client.Do(req)
 }
 
