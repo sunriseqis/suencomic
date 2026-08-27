@@ -406,7 +406,9 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		DialContext:           directDialer.DialContext,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return directDialer.DialContext(ctx, "tcp4", addr)
+		},
 		TLSHandshakeTimeout:   2 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
