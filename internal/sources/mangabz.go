@@ -128,7 +128,12 @@ func (s *MangaBZSource) GetMangaDetail(ctx context.Context, mangaID string) (*Ma
 		return nil, err
 	}
 
-	title := strings.TrimSpace(doc.Find(".detail-info-title, p.detail-info-title, h1.title, .title").First().Text())
+	title := pickTitle([]string{
+		doc.Find(".detail-info-title").First().Text(),
+		doc.Find("p.detail-info-title").First().Text(),
+		doc.Find("h1.title").First().Text(),
+		doc.Find(".title").First().Text(),
+	})
 	if title == "" {
 		title = mangaID
 	}

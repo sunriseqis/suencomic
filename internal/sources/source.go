@@ -316,6 +316,28 @@ func cleanChapterTitle(title string) string {
 	return t
 }
 
+// pickTitle returns the first plausible title from candidates. Sites like DM5
+// embed login/registration prompts as headings; those must never become the
+// manga title (a previous bug made the UI search for the literal word "登录").
+func pickTitle(candidates []string) string {
+	junk := map[string]bool{
+		"登录": true, "登錄": true, "登陆": true, "登入": true,
+		"注册": true, "註冊": true, "登录/注册": true,
+		"login": true, "log in": true, "sign in": true, "register": true,
+	}
+	for _, c := range candidates {
+		t := strings.TrimSpace(c)
+		if t == "" {
+			continue
+		}
+		if junk[strings.ToLower(t)] {
+			continue
+		}
+		return t
+	}
+	return ""
+}
+
 // proxyRouteSeedHosts are hosts known to be unreachable or DNS-poisoned on
 // direct routes in typical deployments; they start out marked proxy-only so
 // requests skip the doomed direct probe.

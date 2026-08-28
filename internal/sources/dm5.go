@@ -144,7 +144,30 @@ func (s *DM5Source) GetMangaDetail(ctx context.Context, mangaID string) (*MangaD
 		return nil, err
 	}
 
-	title := strings.TrimSpace(doc.Find("h1.title, .banner_detail h1, .info h1, h1").First().Text())
+	// Try specific title selectors in priority order — the bare "h1" fallback
+	// must stay last because DM5 pages embed a login dialog whose <h1>登录</h1>
+	// would otherwise become the manga title. The info block mixes the title
+	// with rating spans, so clone and strip them before reading the text.
+	titleText := func(sel string) string {
+		s := doc.Find(sel).First().Clone()
+		s.Find(".right, .score").Remove()
+		return s.Text()
+	}
+	title := pickTitle([]string{
+		titleText("h1.title"),
+		titleText(".banner_detail_form .info p.title"),
+		titleText(".banner_detail h1"),
+		titleText(".info h1"),
+		titleText("h1"),
+	})
+	if title == "" {
+		// Fall back to the <title> tag: "朋友登录漫画_14已完结_在线漫画_动漫屋"
+		if t := strings.TrimSpace(doc.Find("title").First().Text()); t != "" {
+			part := strings.SplitN(t, "_", 2)[0]
+			part = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(part), "漫画"))
+			title = part
+		}
+	}
 	if title == "" {
 		title = mangaID
 	}

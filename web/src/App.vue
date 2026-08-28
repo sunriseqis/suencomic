@@ -616,6 +616,14 @@
           <p class="mono">正在解析漫画章节目录...</p>
         </div>
 
+        <div v-else-if="detailError" class="empty-chapters-card bh-card">
+          <div class="empty-alert-icon">⚠️</div>
+          <div class="empty-alert-content">
+            <h4 class="mono">解析《{{ activeManga?.title }}》失败</h4>
+            <p class="empty-alert-desc">{{ detailError }}</p>
+          </div>
+        </div>
+
         <div v-else-if="activeMangaDetail" class="modal-body">
           <div class="detail-top-card">
             <img :src="activeMangaDetail.cover || activeManga?.cover" class="detail-cover" alt="cover" referrerpolicy="no-referrer" />
@@ -640,10 +648,10 @@
           <div v-if="activeMangaDetail.chapters.length === 0" class="empty-chapters-card bh-card">
             <div class="empty-alert-icon">⚠️</div>
             <div class="empty-alert-content">
-              <h4 class="mono">当前源 [{{ activeMangaDetail.source_name }}] 暂无可下载章节</h4>
-              <p class="empty-alert-desc">该作品在 {{ activeMangaDetail.source_name }} 上可能因版权保护或源站变动未提供章节。点击下方按钮即可一键在其他源（如 MangaBZ / CopyManga）中检索！</p>
-              <button class="bh-btn bh-btn-primary" @click="searchAlternativeSources(activeMangaDetail.title)">
-                ⚡ 在其他漫画源中检索《{{ activeMangaDetail.title }}》
+              <h4 class="mono">当前源 [{{ activeMangaDetail.source_name }}] 未返回任何章节</h4>
+              <p class="empty-alert-desc">该作品在此源可能因版权下架、地区限制或源站维护而无法获取章节。点击下方按钮一键在其他漫画源中检索同名作品！</p>
+              <button class="bh-btn bh-btn-primary" @click="searchAlternativeSources(activeManga?.title || activeMangaDetail.title)">
+                ⚡ 在其他漫画源中检索《{{ activeManga?.title || activeMangaDetail.title }}》
               </button>
             </div>
           </div>
@@ -828,6 +836,7 @@ const appConfig = ref({
 const showDetailModal = ref(false)
 const activeManga = ref(null)
 const activeMangaDetail = ref(null)
+const detailError = ref('')
 const loadingDetail = ref(false)
 const selectedChapterIDs = ref(new Set())
 const selectedFormat = ref('pdf')
@@ -954,6 +963,7 @@ async function handleSearch() {
 async function openMangaDetail(manga) {
   activeManga.value = manga
   activeMangaDetail.value = null
+  detailError.value = ''
   loadingDetail.value = true
   selectedGroup.value = 'all'
   chapterFilter.value = ''
@@ -969,8 +979,11 @@ async function openMangaDetail(manga) {
       const ids = new Set()
       json.data.chapters.forEach(c => ids.add(c.id))
       selectedChapterIDs.value = ids
+    } else {
+      detailError.value = json.error || '解析漫画详情失败，请稍后重试'
     }
   } catch (err) {
+    detailError.value = '请求漫画详情失败: ' + err.message
     console.error('Detail error:', err)
   } finally {
     loadingDetail.value = false

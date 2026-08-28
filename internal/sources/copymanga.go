@@ -23,17 +23,15 @@ type CopyMangaSource struct {
 
 func NewCopyMangaSource() *CopyMangaSource {
 	return &CopyMangaSource{
+		// Live mirrors as of 2026-08 (copymanga.tv/.org/.site and
+		// copy-manga.com web no longer resolve; keeping them would only add
+		// sequential timeouts to every detail fetch).
 		baseURLs: []string{
 			"https://api.mangacopy.com",
 			"https://api.copy-manga.com",
-			"https://api.copymanga.tv",
-			"https://api.copymanga.org",
-			"https://api.copymanga.site",
 		},
 		webBaseURLs: []string{
 			"https://www.mangacopy.com",
-			"https://www.copy-manga.com",
-			"https://www.copymanga.tv",
 		},
 		aesKey: "op0zzpvv.nmn.00p",
 	}
@@ -352,6 +350,16 @@ func (s *CopyMangaSource) GetMangaDetail(ctx context.Context, mangaID string) (*
 	}
 
 	detail.Chapters = CleanAndSortChapters(detail.Chapters, s.ID())
+
+	// CopyManga currently serves an EMPTY chapter directory for every comic
+	// through some exit regions (verified: group/default/chapters returns
+	// code 200 with list=[] and the encrypted web payload contains a single
+	// group with count=0). Failing loudly here is far better than a silent
+	// zero-chapter detail that looks like a broken source.
+	if len(detail.Chapters) == 0 {
+		return nil, fmt.Errorf(
+			"CopyManga 源站未返回《%s》的章节目录（源站可能正在升级维护，或按出口 IP 区域隐藏内容）。请稍后重试、更换代理节点，或改用 MangaBZ / DM5 源", mangaID)
+	}
 
 	return detail, nil
 }
