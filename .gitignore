@@ -25,6 +25,7 @@ web/dist/*
 
 # Download and user data directories
 download/
+config/
 tasks.json
 config.json
 

@@ -19,36 +19,12 @@ services:
     environment:
       - PORT=8090
       - TZ=Asia/Shanghai
-      # ===================================================
-      # 代理：只需这一个变量。应用按 HTTPS_PROXY → HTTP_PROXY → ALL_PROXY
-      # 读取第一个非空值，多写无意义。
-      # 优先级说明：config.json 的 proxy 字段非空时，此处被忽略；
-      # 因此更推荐直接在 config.json 里配代理（可在网页设置页修改）。
-      # 代理不在宿主机上时直接写局域网 IP，例如：
-      #   - HTTPS_PROXY=http://192.168.89.10:20170
-      # ===================================================
-      - HTTPS_PROXY=http://host.docker.internal:20170
     volumes:
       # 持久化漫画下载目录
       - ./download:/app/download
-      # ===== SMB/NAS 下载目录（可选，启用时二选一，并注释掉上面的 ./download 行）=====
-      # 方式一：宿主机已挂载好的 CIFS 路径（/etc/fstab 示例：
-      #   //NAS_IP/共享名 /mnt/nas/comics cifs username=guest,password=guest,vers=3.0,iocharset=utf8 0 0
-      # ）：
-      # - /mnt/nas/comics:/app/download
-      # 方式二：由 compose 直接挂 CIFS 共享（卷定义见文件末尾）
-      # - comics-smb:/app/download
-      # 持久化配置文件与订阅追踪
-      - ./config.json:/app/config.json
-      - ./tasks.json:/app/tasks.json
-      - ./subscriptions.json:/app/subscriptions.json
-
-# ===== SMB/CIFS 卷定义：配合上面的方式二 comics-smb:/app/download 使用 =====
-# device 改为你的共享地址，username/password 改为 NAS 账号。
-# 容器默认以 root 运行，无需 uid/gid；NAS 侧受限时可追加 uid=0,gid=0。
-#volumes:
-#  comics-smb:
-#    driver_opts:
-#      type: cifs
-#      device: "//192.168.89.10/comics"
-#      o: "username=guest,password=guest,vers=3.0,iocharset=utf8"
+      # 配置与状态文件（首次部署前先在宿主机创建：
+      #   mkdir -p config && touch config/config.json config/tasks.json config/subscriptions.json
+      # 代理直接在网页「CONFIG / 系统配置」里填，保存后立即生效）
+      - ./config/config.json:/app/config.json
+      - ./config/tasks.json:/app/tasks.json
+      - ./config/subscriptions.json:/app/subscriptions.json

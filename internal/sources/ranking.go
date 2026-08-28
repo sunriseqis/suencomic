@@ -373,6 +373,15 @@ func (m *SourceManager) FetchCopyMangaRank(ctx context.Context) ([]MangaSearchRe
 	return results, nil
 }
 
+// InvalidateHomeCache drops the cached homepage rankings so the next request
+// refetches from the sources. Called after proxy/config changes so new
+// settings take effect immediately instead of after the cache TTL.
+func InvalidateHomeCache() {
+	homeCacheMu.Lock()
+	homeCacheTime = time.Time{}
+	homeCacheMu.Unlock()
+}
+
 // GetHomeData compiles the homepage ranking across 3 major sources in real-time
 func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	// Fast path: cache hit (any non-empty ranking counts — a CopyManga-only

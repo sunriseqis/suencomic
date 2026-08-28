@@ -80,8 +80,9 @@
 使用 Docker 容器化部署，自动挂载 `./download` 下载目录与配置文件：
 
 ```bash
-# 首次部署前先创建状态文件（避免 Docker 将单文件挂载误创建为目录）：
-touch tasks.json subscriptions.json
+# 首次部署前先创建配置目录与状态文件（避免 Docker 将单文件挂载误创建为目录）：
+mkdir -p config
+touch config/config.json config/tasks.json config/subscriptions.json
 
 # 启动 Docker 服务
 docker compose up -d --build
@@ -89,6 +90,9 @@ docker compose up -d --build
 # 查看运行日志
 docker compose logs -f
 ```
+
+> 配置与状态文件统一存放在宿主机 `./config/` 目录（`config.json` / `tasks.json` / `subscriptions.json`）。若从旧版本升级，把项目根目录原有的三个 json 文件移动到 `./config/` 即可。
+> 代理在网页「CONFIG / 系统配置」页填写，保存后立即生效（榜单缓存与直连/代理路由会自动重置），无需重启容器。
 
 > ⚠️ 更新前端代码后务必加 `--build` 重新构建镜像；若升级后浏览器仍显示旧界面（旧源/旧 Tab），是 index.html 被浏览器缓存所致，强制刷新一次（Ctrl+F5）即可。
 

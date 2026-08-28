@@ -265,6 +265,10 @@ func SetupRouter(
 				c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "error": err.Error()})
 				return
 			}
+			// Proxy/config changes must take effect on the next request:
+			// drop the cached home rankings and re-seed direct/proxy routing.
+			sources.InvalidateHomeCache()
+			sources.ResetProxyRouting()
 			c.JSON(http.StatusOK, gin.H{"code": 0, "data": config.Get()})
 		})
 

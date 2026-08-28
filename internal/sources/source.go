@@ -316,19 +316,42 @@ func cleanChapterTitle(title string) string {
 	return t
 }
 
+// proxyRouteSeedHosts are hosts known to be unreachable or DNS-poisoned on
+// direct routes in typical deployments; they start out marked proxy-only so
+// requests skip the doomed direct probe.
+var proxyRouteSeedHosts = []string{
+	"api.mangacopy.com",
+	"api.copy-manga.com",
+	"api.copymanga.tv",
+	"api.copymanga.org",
+	"www.dm5.com",
+	"dm5.com",
+	"www.mangabz.com",
+	"mangabz.com",
+}
+
+func newProxyRouteTable() map[string]time.Time {
+	tbl := make(map[string]time.Time, len(proxyRouteSeedHosts))
+	expiry := time.Now().Add(365 * 24 * time.Hour)
+	for _, host := range proxyRouteSeedHosts {
+		tbl[host] = expiry
+	}
+	return tbl
+}
+
 var (
 	proxyRouteMu     sync.RWMutex
-	domainNeedsProxy = map[string]time.Time{
-		"api.mangacopy.com":  time.Now().Add(365 * 24 * time.Hour),
-		"api.copy-manga.com": time.Now().Add(365 * 24 * time.Hour),
-		"api.copymanga.tv":   time.Now().Add(365 * 24 * time.Hour),
-		"api.copymanga.org":  time.Now().Add(365 * 24 * time.Hour),
-		"www.dm5.com":        time.Now().Add(365 * 24 * time.Hour),
-		"dm5.com":            time.Now().Add(365 * 24 * time.Hour),
-		"www.mangabz.com":    time.Now().Add(365 * 24 * time.Hour),
-		"mangabz.com":        time.Now().Add(365 * 24 * time.Hour),
-	}
+	domainNeedsProxy = newProxyRouteTable()
 )
+
+// ResetProxyRouting re-seeds the direct/proxy routing table. Called after the
+// proxy configuration changes so the new settings take effect on the next
+// request instead of after a restart.
+func ResetProxyRouting() {
+	proxyRouteMu.Lock()
+	domainNeedsProxy = newProxyRouteTable()
+	proxyRouteMu.Unlock()
+}
 
 func isDomainProxyOnly(host string) bool {
 	proxyRouteMu.RLock()
