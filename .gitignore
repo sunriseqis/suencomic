@@ -17,9 +17,10 @@ test_*.py
 node_modules/
 web/node_modules/
 
-# Build artifacts and frontend dist
-dist/
-web/dist/
+# Build artifacts and frontend dist (keep .gitkeep so `go:embed all:web/dist`
+# compiles on a fresh clone before the frontend is built)
+/dist/
+web/dist/*
 !web/dist/.gitkeep
 
 # Download and user data directories

@@ -8,8 +8,9 @@
 ## 🎨 核心特性
 
 - 🏠 **全新首页（HOME // 热门专区）**
-  - **集英社（Shueisha / 周刊少年 JUMP）殿堂名作榜**：聚合收录《海贼王》、《鬼灭之刃》、《一拳超人》、《咒术回战》、《电锯人》、《间谍过家家》、《火影忍者》、《死神》、《灌篮高手》、《龙珠》等神作，支持一键直达章节与下载。
-  - **全网多源实时热度榜**：实时抓取三大源站热门榜单数据。
+  - **全网多源实时热度榜**：实时抓取 CopyManga / DM5 / MangaBZ 三大源站热门榜单数据，带 DNS 污染防护（直连结果校验失败自动切换代理重试）。
+  - **防毒直连校验**：所有源站请求默认校验 TLS 证书，被污染的直连响应（返回 200 的垃圾页）会被识别并走代理重试。
+  - **全网搜索与智能相关性排序**：三源聚合搜索，简繁同形归一化匹配。
 - 🌐 **三大主流漫画源整合**
   - **CopyManga (拷贝漫画)**: 原生 API 协议解析与 AES-128-CBC 解密。
   - **DM5 (动漫屋)**: 章节目录解析与 Dean Edwards JS 解密流。
@@ -38,7 +39,6 @@
 
 ```
 /home/suencom/
-├── cmd/                      # 应用入口
 ├── internal/
 │   ├── config/               # 配置管理 (config.json)
 │   ├── sources/              # 漫画源解析器 (CopyManga / DM5 / MangaBZ / Unpacker)
@@ -80,12 +80,17 @@
 使用 Docker 容器化部署，自动挂载 `./download` 下载目录与配置文件：
 
 ```bash
+# 首次部署前先创建状态文件（避免 Docker 将单文件挂载误创建为目录）：
+touch tasks.json subscriptions.json
+
 # 启动 Docker 服务
 docker compose up -d --build
 
 # 查看运行日志
 docker compose logs -f
 ```
+
+> ⚠️ 更新前端代码后务必加 `--build` 重新构建镜像；若升级后浏览器仍显示旧界面（旧源/旧 Tab），是 index.html 被浏览器缓存所致，强制刷新一次（Ctrl+F5）即可。
 
 ---
 
@@ -102,9 +107,14 @@ docker compose logs -f
   "auto_fallback": true,
   "check_interval_minutes": 60,
   "default_format": "pdf",
-  "port": 8090
+  "port": 8090,
+  "skip_tls_verify": false
 }
 ```
+
+- `proxy`：留空时回退读取 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 环境变量（便于 Docker 注入）。
+- `check_interval_minutes`：追更订阅检测间隔（分钟），改动即时生效，无需重启。
+- `skip_tls_verify`：默认 `false`（校验源站证书）。仅当你的网络环境存在 TLS 中间人（透明代理）导致源站全部报证书错误时才设为 `true`。
 
 ---
 

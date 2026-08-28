@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -146,8 +145,4 @@ func ExtractImageURLsFromJS(script string) []string {
 // ExtractImagesFromJS is an alias for ExtractImageURLsFromJS
 func ExtractImagesFromJS(script string) []string {
 	return ExtractImageURLsFromJS(script)
-}
-
-func init() {
-	_ = fmt.Sprintf("")
 }

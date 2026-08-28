@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 )
@@ -448,9 +446,4 @@ func (s *CopyMangaSource) GetChapterImages(ctx context.Context, mangaID string, 
 	}
 
 	return images, nil
-}
-
-func init() {
-	_ = bytes.NewBuffer
-	_ = sort.Slice
 }

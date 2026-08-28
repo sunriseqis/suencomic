@@ -196,9 +196,12 @@ func (t *Tracker) checkSingleManga(sub *Subscription) int {
 }
 
 func (t *Tracker) startScheduler() {
-	ticker := time.NewTicker(30 * time.Minute)
+	// Tick every minute and compare against the configured interval so that
+	// changes to check_interval_minutes take effect without a restart.
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
+	var lastCheck time.Time
 	for {
 		select {
 		case <-t.stopChan:
@@ -208,6 +211,10 @@ func (t *Tracker) startScheduler() {
 			if interval <= 0 {
 				interval = 60
 			}
+			if !lastCheck.IsZero() && time.Since(lastCheck) < time.Duration(interval)*time.Minute {
+				continue
+			}
+			lastCheck = time.Now()
 			t.CheckUpdatesNow()
 		}
 	}

@@ -50,6 +50,20 @@ type Task struct {
 	cancelFunc context.CancelFunc `json:"-"`
 }
 
+// clone returns a copy safe to hand to readers (SSE marshalling, JSON API).
+// Live Task structs are mutated by worker goroutines, so every reader must
+// work on a snapshot taken under m.mu instead of the shared pointer.
+func (t *Task) clone() Task {
+	c := *t
+	c.ctx = nil
+	c.cancelFunc = nil
+	if t.Logs != nil {
+		c.Logs = make([]string, len(t.Logs))
+		copy(c.Logs, t.Logs)
+	}
+	return c
+}
+
 type CreateTaskRequest struct {
 	MangaID      string   `json:"manga_id"`
 	MangaTitle   string   `json:"manga_title"`
@@ -96,7 +110,7 @@ func InitManager(sourceMgr *sources.SourceManager) *Manager {
 	}
 
 	// Auto-queue any pending/downloading tasks from previous run
-	mgr.mu.RLock()
+	mgr.mu.Lock()
 	for _, t := range mgr.tasks {
 		if t.Status == StatusPending || t.Status == StatusDownloading {
 			t.Status = StatusPending
@@ -106,7 +120,7 @@ func InitManager(sourceMgr *sources.SourceManager) *Manager {
 			}
 		}
 	}
-	mgr.mu.RUnlock()
+	mgr.mu.Unlock()
 
 	DefaultManager = mgr
 	return mgr
@@ -129,11 +143,13 @@ func (m *Manager) loadTasks() {
 }
 
 func (m *Manager) saveTasks() {
+	// Snapshot under lock, marshal outside so long serializations never block
+	// workers, and so the data marshalled is a consistent copy.
 	m.mu.RLock()
-	list := make([]*Task, 0, len(m.taskOrder))
+	list := make([]Task, 0, len(m.taskOrder))
 	for _, id := range m.taskOrder {
 		if t, ok := m.tasks[id]; ok {
-			list = append(list, t)
+			list = append(list, t.clone())
 		}
 	}
 	m.mu.RUnlock()
@@ -159,12 +175,37 @@ func (m *Manager) Unsubscribe(ch chan *Task) {
 	close(ch)
 }
 
+// broadcast sends a snapshot of the task to all subscribers. Callers may pass
+// the live pointer; the clone is taken under m.mu so readers never observe a
+// half-updated struct.
 func (m *Manager) broadcast(task *Task) {
+	m.mu.RLock()
+	c := task.clone()
+	m.mu.RUnlock()
+
 	m.subMu.RLock()
 	defer m.subMu.RUnlock()
 	for ch := range m.subscribers {
 		select {
-		case ch <- task:
+		case ch <- &c:
+		default:
+		}
+	}
+}
+
+// logAndBroadcast appends a log entry and pushes the update to subscribers.
+func (m *Manager) logAndBroadcast(task *Task, msg string) {
+	m.mu.Lock()
+	task.addLog(msg)
+	task.UpdatedAt = time.Now()
+	c := task.clone()
+	m.mu.Unlock()
+
+	m.subMu.RLock()
+	defer m.subMu.RUnlock()
+	for ch := range m.subscribers {
+		select {
+		case ch <- &c:
 		default:
 		}
 	}
@@ -231,7 +272,8 @@ func (m *Manager) GetAllTasks() []*Task {
 	res := make([]*Task, 0, len(m.taskOrder))
 	for _, id := range m.taskOrder {
 		if t, ok := m.tasks[id]; ok {
-			res = append(res, t)
+			c := t.clone()
+			res = append(res, &c)
 		}
 	}
 	return res
@@ -241,7 +283,11 @@ func (m *Manager) GetTask(id string) (*Task, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	t, ok := m.tasks[id]
-	return t, ok
+	if !ok {
+		return nil, false
+	}
+	c := t.clone()
+	return &c, true
 }
 
 func (m *Manager) PauseTask(id string) bool {
@@ -261,7 +307,7 @@ func (m *Manager) PauseTask(id string) bool {
 		t.addLog("任务已暂停")
 		t.UpdatedAt = time.Now()
 		m.mu.Unlock()
-		go m.broadcast(t)
+		m.broadcast(t)
 		m.saveTasks()
 		return true
 	}
@@ -284,7 +330,7 @@ func (m *Manager) ResumeTask(id string) bool {
 		t.addLog("任务已恢复，重新加入队列")
 		t.UpdatedAt = time.Now()
 		m.mu.Unlock()
-		go m.broadcast(t)
+		m.broadcast(t)
 		m.saveTasks()
 
 		select {
@@ -369,21 +415,22 @@ func sanitizeFilename(name string) string {
 }
 
 func (m *Manager) processTask(taskID string) {
-	m.mu.RLock()
+	// Atomically claim the task: the status check and transition to
+	// Downloading must happen under one lock, otherwise a double resume could
+	// let two workers process the same task concurrently.
+	m.mu.Lock()
 	task, ok := m.tasks[taskID]
-	m.mu.RUnlock()
-
 	if !ok || task.Status != StatusPending {
+		m.mu.Unlock()
 		return
 	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	task.ctx = ctx
 	task.cancelFunc = cancel
-
 	task.Status = StatusDownloading
 	task.UpdatedAt = time.Now()
 	task.addLog(fmt.Sprintf("开始处理下载任务: 《%s》- %s", task.MangaTitle, task.ChapterTitle))
+	m.mu.Unlock()
 	m.broadcast(task)
 	m.saveTasks()
 
@@ -410,12 +457,12 @@ func (m *Manager) processTask(taskID string) {
 		task.MangaID,
 		task.ChapterID,
 		func(logMsg string) {
-			task.addLog(logMsg)
-			m.broadcast(task)
+			m.logAndBroadcast(task, logMsg)
 		},
 	)
 
 	if err != nil {
+		m.mu.Lock()
 		if ctx.Err() != nil {
 			task.Status = StatusPaused
 			task.addLog("任务已停止")
@@ -425,14 +472,20 @@ func (m *Manager) processTask(taskID string) {
 			task.addLog(fmt.Sprintf("获取图片链接失败: %v", err))
 		}
 		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
 		m.broadcast(task)
 		m.saveTasks()
 		return
 	}
 
+	m.mu.Lock()
 	task.ActiveSource = activeSrc
 	task.TotalImages = len(images)
+	// Count from scratch: a resumed task still carries DownloadedImages from
+	// the previous run in tasks.json; existing files are re-counted below.
+	task.DownloadedImages = 0
 	task.addLog(fmt.Sprintf("解析完成，共 %d 张图片，开始下载数据流...", len(images)))
+	m.mu.Unlock()
 	m.broadcast(task)
 	m.saveTasks()
 
@@ -442,11 +495,14 @@ func (m *Manager) processTask(taskID string) {
 		maxImgWorkers = 5
 	}
 
+	// One shared client for the whole task: a fresh transport per image would
+	// throw away connection pooling and re-run TLS handshakes 100+ times.
+	client := sources.CreateHTTPClient(25 * time.Second)
+
 	sem := make(chan struct{}, maxImgWorkers)
 	var dlWg sync.WaitGroup
-	var dlMu sync.Mutex
-	var downloadedPaths = make([]string, len(images))
 	var dlErr error
+	downloadedPaths := make([]string, len(images))
 
 	for idx, imgURL := range images {
 		if ctx.Err() != nil {
@@ -472,23 +528,23 @@ func (m *Manager) processTask(taskID string) {
 
 			// Check existing file (Resume / 断点续传)
 			if stat, sErr := os.Stat(destFile); sErr == nil && stat.Size() > 1024 {
-				dlMu.Lock()
+				m.mu.Lock()
 				downloadedPaths[i] = destFile
 				task.DownloadedImages++
 				task.Progress = float64(task.DownloadedImages) / float64(task.TotalImages) * 80.0
 				task.UpdatedAt = time.Now()
-				dlMu.Unlock()
+				m.mu.Unlock()
 				m.broadcast(task)
 				return
 			}
 
-			// Download file
-			client := sources.CreateHTTPClient(25 * time.Second)
 			req, rErr := http.NewRequestWithContext(ctx, "GET", u, nil)
 			if rErr != nil {
-				dlMu.Lock()
-				dlErr = rErr
-				dlMu.Unlock()
+				m.mu.Lock()
+				if dlErr == nil {
+					dlErr = rErr
+				}
+				m.mu.Unlock()
 				return
 			}
 
@@ -505,43 +561,51 @@ func (m *Manager) processTask(taskID string) {
 
 			resp, dErr := client.Do(req)
 			if dErr != nil {
-				dlMu.Lock()
-				dlErr = dErr
-				dlMu.Unlock()
+				m.mu.Lock()
+				if dlErr == nil {
+					dlErr = dErr
+				}
+				m.mu.Unlock()
 				return
 			}
 			defer resp.Body.Close()
 
 			if resp.StatusCode != 200 {
-				dlMu.Lock()
-				dlErr = fmt.Errorf("image HTTP status %d", resp.StatusCode)
-				dlMu.Unlock()
+				m.mu.Lock()
+				if dlErr == nil {
+					dlErr = fmt.Errorf("image HTTP status %d", resp.StatusCode)
+				}
+				m.mu.Unlock()
 				return
 			}
 
 			outF, cErr := os.Create(destFile)
 			if cErr != nil {
-				dlMu.Lock()
-				dlErr = cErr
-				dlMu.Unlock()
+				m.mu.Lock()
+				if dlErr == nil {
+					dlErr = cErr
+				}
+				m.mu.Unlock()
 				return
 			}
 			_, cpErr := io.Copy(outF, resp.Body)
 			outF.Close()
 
 			if cpErr != nil {
-				dlMu.Lock()
-				dlErr = cpErr
-				dlMu.Unlock()
+				m.mu.Lock()
+				if dlErr == nil {
+					dlErr = cpErr
+				}
+				m.mu.Unlock()
 				return
 			}
 
-			dlMu.Lock()
+			m.mu.Lock()
 			downloadedPaths[i] = destFile
 			task.DownloadedImages++
 			task.Progress = float64(task.DownloadedImages) / float64(task.TotalImages) * 80.0
 			task.UpdatedAt = time.Now()
-			dlMu.Unlock()
+			m.mu.Unlock()
 			m.broadcast(task)
 		}(idx, imgURL)
 	}
@@ -549,46 +613,51 @@ func (m *Manager) processTask(taskID string) {
 	dlWg.Wait()
 
 	if ctx.Err() != nil {
+		m.mu.Lock()
 		task.Status = StatusPaused
 		task.addLog("下载被用户暂停")
 		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
 		m.broadcast(task)
 		m.saveTasks()
 		return
 	}
 
-	if dlErr != nil && task.DownloadedImages < task.TotalImages {
-		task.Status = StatusFailed
-		task.Error = dlErr.Error()
-		task.addLog(fmt.Sprintf("图片下载发生错误: %v", dlErr))
-		task.UpdatedAt = time.Now()
-		m.broadcast(task)
-		m.saveTasks()
-		return
-	}
-
-	// Filter valid downloaded paths
+	m.mu.RLock()
 	var validPaths []string
 	for _, p := range downloadedPaths {
 		if p != "" {
 			validPaths = append(validPaths, p)
 		}
 	}
+	total := task.TotalImages
+	m.mu.RUnlock()
 
-	if len(validPaths) == 0 {
+	// Every requested image must be present — a partial set would produce a
+	// corrupted archive reported as complete.
+	if len(validPaths) < total {
+		m.mu.Lock()
 		task.Status = StatusFailed
-		task.Error = "no valid downloaded images found"
-		task.addLog("错误: 没有有效下载的图片")
+		if dlErr != nil {
+			task.Error = dlErr.Error()
+			task.addLog(fmt.Sprintf("图片下载发生错误: %v", dlErr))
+		} else {
+			task.Error = fmt.Sprintf("downloaded %d/%d images", len(validPaths), total)
+			task.addLog(task.Error)
+		}
 		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
 		m.broadcast(task)
 		m.saveTasks()
 		return
 	}
 
 	// Package according to requested format
+	m.mu.Lock()
 	task.Status = StatusProcessing
 	task.Progress = 85.0
 	task.addLog(fmt.Sprintf("图片下载完毕，正在打包格式: [%s] ...", strings.ToUpper(task.Format)))
+	m.mu.Unlock()
 	m.broadcast(task)
 	m.saveTasks()
 
@@ -629,20 +698,24 @@ func (m *Manager) processTask(taskID string) {
 	}
 
 	if formatErr != nil {
+		m.mu.Lock()
 		task.Status = StatusFailed
 		task.Error = fmt.Sprintf("打包格式 %s 失败: %v", task.Format, formatErr)
 		task.addLog(task.Error)
 		task.UpdatedAt = time.Now()
+		m.mu.Unlock()
 		m.broadcast(task)
 		m.saveTasks()
 		return
 	}
 
+	m.mu.Lock()
 	task.OutputPath = outputFinalPath
 	task.Progress = 100.0
 	task.Status = StatusCompleted
 	task.addLog(fmt.Sprintf("✓ 下载完成！输出文件: %s", outputFinalPath))
 	task.UpdatedAt = time.Now()
+	m.mu.Unlock()
 	m.broadcast(task)
 	m.saveTasks()
 }

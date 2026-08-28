@@ -32,8 +32,8 @@ type ChapterInfo struct {
 	Order     int    `json:"order"`
 	Source    string `json:"source"`
 	IsTrial   bool   `json:"is_trial"`
-	Type      string `json:"type"`       // "chapter", "volume", "extra"
-	Group     string `json:"group"`      // "连载单话", "单行本", "番外特别篇"
+	Type      string `json:"type"`  // "chapter", "volume", "extra"
+	Group     string `json:"group"` // "连载单话", "单行本", "番外特别篇"
 	ExtraData string `json:"extra_data,omitempty"`
 }
 
@@ -392,6 +392,75 @@ func (t *SmartHybridTransport) RoundTrip(req *http.Request) (*http.Response, err
 	return t.proxyTransport.RoundTrip(req)
 }
 
+// newTLSConfig returns the TLS config honouring the user's skip_tls_verify setting.
+func newTLSConfig(cfg config.Config) *tls.Config {
+	return &tls.Config{InsecureSkipVerify: cfg.SkipTLSVerify}
+}
+
+// buildProxyTransport builds an http.Transport that routes through cfg.Proxy.
+// Returns (transport, true) when a proxy is configured, (nil, false) otherwise.
+func buildProxyTransport(cfg config.Config) (*http.Transport, bool) {
+	if cfg.Proxy == "" {
+		return nil, false
+	}
+	proxyURL, err := url.Parse(cfg.Proxy)
+	if err != nil {
+		return nil, false
+	}
+
+	proxyDialer := &net.Dialer{
+		// Proxy dial: 6s is enough even for slow HTTPS proxies
+		Timeout:   6 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	transport := &http.Transport{
+		TLSClientConfig: newTLSConfig(cfg),
+		// Keep these generous but capped so total stays ~15s (6+4+8)
+		TLSHandshakeTimeout:   4 * time.Second,
+		ResponseHeaderTimeout: 8 * time.Second,
+		DisableKeepAlives:     false,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+	}
+
+	if proxyURL.Scheme == "socks5" || proxyURL.Scheme == "socks5h" {
+		sDialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, proxyDialer)
+		if sErr == nil {
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return sDialer.Dial(network, addr)
+			}
+		}
+	} else {
+		transport.Proxy = http.ProxyURL(proxyURL)
+		transport.DialContext = proxyDialer.DialContext
+	}
+	return transport, true
+}
+
+// CreateProxyOnlyClient creates an HTTP client that always routes through the
+// configured proxy (used to retry requests whose direct response looks wrong,
+// e.g. DNS-poisoned interception pages that return HTTP 200).
+func CreateProxyOnlyClient(timeout time.Duration) *http.Client {
+	if timeout < 8*time.Second {
+		timeout = 15 * time.Second
+	}
+	cfg := config.Get()
+	if proxyTransport, ok := buildProxyTransport(cfg); ok {
+		return &http.Client{Transport: proxyTransport, Timeout: timeout}
+	}
+	// No proxy configured: fall back to a plain direct client.
+	directTransport := &http.Transport{
+		TLSClientConfig:       newTLSConfig(cfg),
+		DialContext:           (&net.Dialer{Timeout: 6 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   4 * time.Second,
+		ResponseHeaderTimeout: 8 * time.Second,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		Proxy:                 http.ProxyFromEnvironment,
+	}
+	return &http.Client{Transport: directTransport, Timeout: timeout}
+}
+
 // CreateHTTPClient creates an HTTP client that prioritizes direct connection and automatically falls back to proxy
 func CreateHTTPClient(timeout time.Duration) *http.Client {
 	if timeout < 8*time.Second {
@@ -405,9 +474,7 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 	}
 
 	directTransport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
+		TLSClientConfig: newTLSConfig(cfg),
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return directDialer.DialContext(ctx, "tcp4", addr)
 		},
@@ -420,43 +487,7 @@ func CreateHTTPClient(timeout time.Duration) *http.Client {
 		Proxy:                 nil,
 	}
 
-	var proxyTransport *http.Transport
-	hasProxy := false
-
-	if cfg.Proxy != "" {
-		proxyURL, err := url.Parse(cfg.Proxy)
-		if err == nil {
-			hasProxy = true
-			proxyDialer := &net.Dialer{
-				// Proxy dial: 6s is enough even for slow HTTPS proxies
-				Timeout:   6 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}
-			proxyTransport = &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-				},
-				// Keep these generous but capped so total stays ~15s (6+4+8)
-				TLSHandshakeTimeout:   4 * time.Second,
-				ResponseHeaderTimeout: 8 * time.Second,
-				DisableKeepAlives:     false,
-				MaxIdleConns:          100,
-				IdleConnTimeout:       90 * time.Second,
-			}
-
-			if proxyURL.Scheme == "socks5" || proxyURL.Scheme == "socks5h" {
-				sDialer, sErr := proxy.SOCKS5("tcp", proxyURL.Host, nil, proxyDialer)
-				if sErr == nil {
-					proxyTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-						return sDialer.Dial(network, addr)
-					}
-				}
-			} else {
-				proxyTransport.Proxy = http.ProxyURL(proxyURL)
-				proxyTransport.DialContext = proxyDialer.DialContext
-			}
-		}
-	}
+	proxyTransport, hasProxy := buildProxyTransport(cfg)
 
 	if !hasProxy {
 		directTransport.Proxy = http.ProxyFromEnvironment

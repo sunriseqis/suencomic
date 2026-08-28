@@ -15,7 +15,7 @@ import (
 	"manga-downloader/internal/tracker"
 )
 
-//go:embed web/dist/*
+//go:embed all:web/dist
 var embeddedWeb embed.FS
 
 func getFileSystem() http.FileSystem {

@@ -273,12 +273,14 @@ func (s *DM5Source) GetChapterImages(ctx context.Context, mangaID string, chapte
 	}
 
 	var images []string
+	failedPages := 0
 	for page := 1; page <= totalPages; page++ {
 		ashxURL := fmt.Sprintf("%s/m%s/chapterimage.ashx?cid=%s&page=%d&key=&_type=1&_cid=%s&_mid=%s&_dt=%s&_sign=%s",
 			s.baseURL, cid, cid, page, cid, mid, url.QueryEscape(viewSignDt), viewSign)
 
 		ashxReq, aErr := http.NewRequestWithContext(ctx, "GET", ashxURL, nil)
 		if aErr != nil {
+			failedPages++
 			continue
 		}
 		ashxReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -286,6 +288,7 @@ func (s *DM5Source) GetChapterImages(ctx context.Context, mangaID string, chapte
 
 		ashxResp, aErr := client.Do(ashxReq)
 		if aErr != nil {
+			failedPages++
 			continue
 		}
 
@@ -296,6 +299,8 @@ func (s *DM5Source) GetChapterImages(ctx context.Context, mangaID string, chapte
 		pageImages := ExtractImagesFromJS(jsCode)
 		if len(pageImages) > 0 {
 			images = append(images, pageImages...)
+		} else {
+			failedPages++
 		}
 	}
 
@@ -305,6 +310,12 @@ func (s *DM5Source) GetChapterImages(ctx context.Context, mangaID string, chapte
 
 	if len(images) == 0 {
 		return nil, fmt.Errorf("no images retrieved for DM5 chapter %s", chapterID)
+	}
+
+	// Never return a silently incomplete chapter: a missing middle page would
+	// otherwise produce a corrupted archive reported as 100% complete.
+	if failedPages > 0 {
+		return nil, fmt.Errorf("DM5 chapter %s incomplete: %d/%d pages failed to load", chapterID, failedPages, totalPages)
 	}
 
 	return images, nil

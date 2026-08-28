@@ -7,8 +7,8 @@ import (
 	"image"
 	_ "image/gif"
 	"image/jpeg"
-	"image/png"
-	"io"
+	_ "image/png"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,11 +17,20 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// EnsureImageAsJPEG ensures an image file is readable and converts WebP/PNG/GIF to JPEG if necessary for PDF compatibility
-func EnsureImageAsJPEG(srcPath string) ([]byte, int, int, error) {
+// prepareImageForPDF returns PDF-ready JPEG bytes plus the pixel dimensions.
+// Images that are already JPEG are passed through untouched — re-encoding them
+// would add a needless generation of quality loss and a full decode/encode
+// cycle per page. Everything else is decoded and converted to JPEG.
+func prepareImageForPDF(srcPath string) ([]byte, int, int, error) {
 	data, err := os.ReadFile(srcPath)
 	if err != nil {
 		return nil, 0, 0, err
+	}
+
+	if http.DetectContentType(data) == "image/jpeg" {
+		if cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(data)); cfgErr == nil && cfg.Width > 0 {
+			return data, cfg.Width, cfg.Height, nil
+		}
 	}
 
 	img, _, err := image.Decode(bytes.NewReader(data))
@@ -30,16 +39,12 @@ func EnsureImageAsJPEG(srcPath string) ([]byte, int, int, error) {
 	}
 
 	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
 	var buf bytes.Buffer
-	err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 92})
-	if err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 92}); err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to encode image as JPEG: %w", err)
 	}
 
-	return buf.Bytes(), width, height, nil
+	return buf.Bytes(), bounds.Dx(), bounds.Dy(), nil
 }
 
 // MergeToPDF merges a list of local image files into a single PDF document
@@ -55,7 +60,7 @@ func MergeToPDF(outputPath string, imagePaths []string, title string) error {
 	pdf.SetAuthor("Manga Downloader", true)
 
 	for i, imgPath := range imagePaths {
-		jpegData, width, height, err := EnsureImageAsJPEG(imgPath)
+		jpegData, width, height, err := prepareImageForPDF(imgPath)
 		if err != nil {
 			continue
 		}
@@ -309,9 +314,4 @@ func escapeXML(s string) string {
 	s = strings.ReplaceAll(s, "\"", "&quot;")
 	s = strings.ReplaceAll(s, "'", "&apos;")
 	return s
-}
-
-func init() {
-	_ = io.Discard
-	_ = png.Decode
 }

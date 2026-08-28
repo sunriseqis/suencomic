@@ -1,17 +1,20 @@
 package sources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"manga-downloader/internal/config"
 )
 
 type HomeRankings struct {
@@ -27,30 +30,82 @@ var (
 	homeCacheMu   sync.RWMutex
 	homeCacheData HomeRankings
 	homeCacheTime time.Time
+
+	// homeFetchMu + homeFetchCh implement a lightweight single-flight so
+	// concurrent /api/home requests share one background fetch instead of
+	// each hammering the source sites.
+	homeFetchMu  sync.Mutex
+	homeFetchCh  chan struct{}
+	homeFetchTTL = 5 * time.Minute
 )
 
-// FetchMangaBZRank fetches top 12 real-time popular manga from MangaBZ
-func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResult, error) {
-	client := CreateHTTPClient(18 * time.Second)
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.mangabz.com/manga-list-0-0-10-p1/", nil)
-	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/122.0.0.0")
-	req.Header.Set("Referer", "https://www.mangabz.com/")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+var chromeHeaders = http.Header{
+	"User-Agent": []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"},
+	"Accept":     []string{"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"},
+}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("连接 MangaBZ 失败: %w", err)
+// fetchPageForScraping fetches an HTML page for scraping with an important
+// safeguard: the direct connection in this network is DNS-poisoned, so a
+// poisoned/intercepted host can answer with HTTP 200 and a garbage page that
+// is NOT the real site. The response is therefore validated against a content
+// marker; if it does not match, the domain is marked proxy-only and the fetch
+// is retried through the proxy. The returned error (when non-nil) embeds
+// diagnostics from both attempts to make remote failures debuggable.
+func fetchPageForScraping(ctx context.Context, pageURL string, referer string, marker string) ([]byte, error) {
+	setHeaders := func(req *http.Request) {
+		req.Header.Set("User-Agent", chromeHeaders.Get("User-Agent"))
+		req.Header.Set("Referer", referer)
+		req.Header.Set("Accept", chromeHeaders.Get("Accept"))
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("MangaBZ 返回状态码 %d", resp.StatusCode)
+	tryFetch := func(client *http.Client) (int, []byte, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", pageURL, nil)
+		if err != nil {
+			return 0, nil, err
+		}
+		setHeaders(req)
+		resp, err := client.Do(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return resp.StatusCode, nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 3<<20))
+		if err != nil {
+			return resp.StatusCode, nil, err
+		}
+		return resp.StatusCode, body, nil
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	status, body, err := tryFetch(CreateHTTPClient(18 * time.Second))
+	if err == nil && strings.Contains(string(body), marker) {
+		return body, nil
+	}
+	directInfo := fmt.Sprintf("直连(status=%d bytes=%d err=%v)", status, len(body), err)
+
+	if u, pErr := url.Parse(pageURL); pErr == nil && u.Hostname() != "" {
+		markDomainNeedsProxy(u.Hostname())
+	}
+
+	cfg := config.Get()
+	if cfg.Proxy == "" {
+		if err != nil {
+			return nil, fmt.Errorf("请求失败: %v (未配置代理，无法重试)", err)
+		}
+		return nil, fmt.Errorf("页面内容校验失败 (%s, bytes=%d, 未配置代理，无法重试)", directInfo, len(body))
+	}
+
+	status2, body2, err2 := tryFetch(CreateProxyOnlyClient(20 * time.Second))
+	if err2 == nil && strings.Contains(string(body2), marker) {
+		return body2, nil
+	}
+	proxyInfo := fmt.Sprintf("代理(status=%d bytes=%d err=%v)", status2, len(body2), err2)
+	return nil, fmt.Errorf("页面内容校验失败: %s / %s", directInfo, proxyInfo)
+}
+
+func parseMangaBZRank(body []byte) ([]MangaSearchResult, error) {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("解析 HTML 失败: %w", err)
 	}
@@ -104,34 +159,38 @@ func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResu
 	})
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("未在 MangaBZ 页面提取到榜单列表")
+		return nil, fmt.Errorf("未在 MangaBZ 页面提取到榜单列表 (bytes=%d, mh_item标记=%d, pageTitle=%q)",
+			len(body), strings.Count(string(body), "mh-item"), strings.TrimSpace(doc.Find("title").First().Text()))
 	}
-
 	return results, nil
 }
 
-// FetchDM5Rank fetches top 12 real-time popular manga from DM5 (动漫屋)
-func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, error) {
-	client := CreateHTTPClient(20 * time.Second)
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-rank/", nil)
-	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/122.0.0.0")
-	req.Header.Set("Referer", "https://www.dm5.com/")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("连接 DM5 失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("DM5 返回状态码 %d", resp.StatusCode)
+// FetchMangaBZRank fetches top 12 real-time popular manga from MangaBZ
+func (m *SourceManager) FetchMangaBZRank(ctx context.Context) ([]MangaSearchResult, error) {
+	candidateURLs := []string{
+		"https://www.mangabz.com/manga-list-0-0-10-p1/", // 人氣排序
+		"https://www.mangabz.com/manga-list-0-0-2-p1/",  // 更新時間排序 (备用)
+		"https://www.mangabz.com/",                      // 首页 (最后兜底)
 	}
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	var lastErr error
+	for _, pageURL := range candidateURLs {
+		body, err := fetchPageForScraping(ctx, pageURL, "https://www.mangabz.com/", "mh-item")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		results, pErr := parseMangaBZRank(body)
+		if pErr == nil {
+			return results, nil
+		}
+		lastErr = pErr
+	}
+	return nil, lastErr
+}
+
+func parseDM5Rank(body []byte) ([]MangaSearchResult, error) {
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("解析 HTML 失败: %w", err)
 	}
@@ -140,82 +199,84 @@ func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, 
 	var results []MangaSearchResult
 	seen := make(map[string]bool)
 
-	parseDM5Items := func(d *goquery.Document) {
-		d.Find(".mh-item").Each(func(i int, sel *goquery.Selection) {
-			if len(results) >= 12 {
-				return
-			}
-			tLink := sel.Find("h2.title a, .title a").First()
-			title := strings.TrimSpace(tLink.Text())
-			href, _ := tLink.Attr("href")
-			if title == "" || href == "" {
-				return
-			}
-			id := strings.Trim(href, "/")
-			if seen[id] || seen[title] {
-				return
-			}
-			seen[id] = true
-			seen[title] = true
+	doc.Find(".mh-item").Each(func(i int, sel *goquery.Selection) {
+		if len(results) >= 12 {
+			return
+		}
+		tLink := sel.Find("h2.title a, .title a").First()
+		title := strings.TrimSpace(tLink.Text())
+		href, _ := tLink.Attr("href")
+		if title == "" || href == "" {
+			return
+		}
+		id := strings.Trim(href, "/")
+		if seen[id] || seen[title] {
+			return
+		}
+		seen[id] = true
+		seen[title] = true
 
-			cover, _ := sel.Find("img").Attr("src")
-			if cover == "" {
-				style, _ := sel.Find(".mh-cover").Attr("style")
-				if match := bgURLRegex.FindStringSubmatch(style); len(match) > 1 {
-					cover = strings.Trim(match[1], `"' `)
-				}
-			}
-			author := strings.TrimSpace(sel.Find(".zl, .author").Text())
-			author = strings.ReplaceAll(author, "\n", " ")
-			author = strings.ReplaceAll(author, "\r", " ")
-			author = strings.ReplaceAll(author, "\t", " ")
-			if idx := strings.Index(author, "评分"); idx != -1 {
-				author = author[:idx]
-			}
-			author = strings.TrimPrefix(author, "作者：")
-			author = strings.TrimPrefix(author, "作者:")
-			author = strings.TrimSpace(author)
-			if author == "" {
-				author = "动漫屋热门"
-			}
-			latest := strings.TrimSpace(sel.Find(".chapter a").Text())
-
-			results = append(results, MangaSearchResult{
-				ID:            id,
-				Title:         title,
-				Cover:         cover,
-				Author:        author,
-				LatestChapter: latest,
-				Source:        "dm5",
-				SourceName:    "DM5",
-			})
-		})
-	}
-
-	parseDM5Items(doc)
-
-	if len(results) < 12 {
-		req2, err2 := http.NewRequestWithContext(ctx, "GET", "https://www.dm5.com/manhua-list-0-0-10-p1/", nil)
-		if err2 == nil {
-			req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/122.0.0.0")
-			req2.Header.Set("Referer", "https://www.dm5.com/")
-			req2.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-			resp2, rErr2 := client.Do(req2)
-			if rErr2 == nil && resp2.StatusCode == 200 {
-				doc2, dErr2 := goquery.NewDocumentFromReader(resp2.Body)
-				resp2.Body.Close()
-				if dErr2 == nil {
-					parseDM5Items(doc2)
-				}
+		cover, _ := sel.Find("img").Attr("src")
+		if cover == "" {
+			style, _ := sel.Find(".mh-cover").Attr("style")
+			if match := bgURLRegex.FindStringSubmatch(style); len(match) > 1 {
+				cover = strings.Trim(match[1], `"' `)
 			}
 		}
-	}
+		author := strings.TrimSpace(sel.Find(".zl, .author").Text())
+		author = strings.ReplaceAll(author, "\n", " ")
+		author = strings.ReplaceAll(author, "\r", " ")
+		author = strings.ReplaceAll(author, "\t", " ")
+		if idx := strings.Index(author, "评分"); idx != -1 {
+			author = author[:idx]
+		}
+		author = strings.TrimPrefix(author, "作者：")
+		author = strings.TrimPrefix(author, "作者:")
+		author = strings.TrimSpace(author)
+		if author == "" {
+			author = "动漫屋热门"
+		}
+		latest := strings.TrimSpace(sel.Find(".chapter a").Text())
+
+		results = append(results, MangaSearchResult{
+			ID:            id,
+			Title:         title,
+			Cover:         cover,
+			Author:        author,
+			LatestChapter: latest,
+			Source:        "dm5",
+			SourceName:    "DM5",
+		})
+	})
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("未在 DM5 页面提取到榜单列表")
+		return nil, fmt.Errorf("未在 DM5 页面提取到榜单列表 (bytes=%d, mh_item标记=%d, pageTitle=%q)",
+			len(body), strings.Count(string(body), "mh-item"), strings.TrimSpace(doc.Find("title").First().Text()))
+	}
+	return results, nil
+}
+
+// FetchDM5Rank fetches top 12 real-time popular manga from DM5 (动漫屋)
+func (m *SourceManager) FetchDM5Rank(ctx context.Context) ([]MangaSearchResult, error) {
+	candidateURLs := []string{
+		"https://www.dm5.com/manhua-rank/",
+		"https://www.dm5.com/manhua-list-0-0-10-p1/",
 	}
 
-	return results, nil
+	var lastErr error
+	for _, pageURL := range candidateURLs {
+		body, err := fetchPageForScraping(ctx, pageURL, "https://www.dm5.com/", "mh-item")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		results, pErr := parseDM5Rank(body)
+		if pErr == nil {
+			return results, nil
+		}
+		lastErr = pErr
+	}
+	return nil, lastErr
 }
 
 // FetchCopyMangaRank fetches top 12 popular/trending manga from CopyManga
@@ -252,9 +313,9 @@ func (m *SourceManager) FetchCopyMangaRank(ctx context.Context) ([]MangaSearchRe
 		Results struct {
 			List []struct {
 				Comic struct {
-					Name             string `json:"name"`
-					PathWord         string `json:"path_word"`
-					Cover            string `json:"cover"`
+					Name             string                  `json:"name"`
+					PathWord         string                  `json:"path_word"`
+					Cover            string                  `json:"cover"`
 					Author           []struct{ Name string } `json:"author"`
 					LastChapterTitle string                  `json:"last_chapter_title"`
 				} `json:"comic"`
@@ -314,14 +375,38 @@ func (m *SourceManager) FetchCopyMangaRank(ctx context.Context) ([]MangaSearchRe
 
 // GetHomeData compiles the homepage ranking across 3 major sources in real-time
 func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
+	// Fast path: cache hit (any non-empty ranking counts — a CopyManga-only
+	// success is still worth caching so we don't re-hit the sites per request)
 	homeCacheMu.RLock()
-	if time.Since(homeCacheTime) < 5*time.Minute && (len(homeCacheData.MangaBZ) > 0 || len(homeCacheData.DM5) > 0) {
+	if time.Since(homeCacheTime) < homeFetchTTL &&
+		(len(homeCacheData.MangaBZ) > 0 || len(homeCacheData.DM5) > 0 || len(homeCacheData.CopyManga) > 0) {
 		data := homeCacheData
 		homeCacheMu.RUnlock()
 		return data
 	}
 	homeCacheMu.RUnlock()
 
+	// Single-flight: deduplicate concurrent fetches
+	homeFetchMu.Lock()
+	if homeFetchCh == nil {
+		homeFetchCh = make(chan struct{})
+		go m.fetchHomeData()
+	}
+	ch := homeFetchCh
+	homeFetchMu.Unlock()
+
+	select {
+	case <-ch:
+	case <-ctx.Done():
+	case <-time.After(25 * time.Second):
+	}
+
+	homeCacheMu.RLock()
+	defer homeCacheMu.RUnlock()
+	return homeCacheData
+}
+
+func (m *SourceManager) fetchHomeData() {
 	var wg sync.WaitGroup
 	var mbz, dm5, copyM []MangaSearchResult
 	var mbzErr, dm5Err, copyErr error
@@ -349,17 +434,7 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 		copyM, copyErr = m.FetchCopyMangaRank(sCtx)
 	}()
 
-	// Wait for all goroutines, but cap the overall blocking at 20s
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(20 * time.Second):
-		// Some sources timed out internally; proceed with whatever we have
-	}
+	wg.Wait()
 
 	if mbz == nil {
 		mbz = make([]MangaSearchResult, 0)
@@ -391,5 +466,10 @@ func (m *SourceManager) GetHomeData(ctx context.Context) HomeRankings {
 	homeCacheTime = time.Now()
 	homeCacheMu.Unlock()
 
-	return result
+	homeFetchMu.Lock()
+	if ch := homeFetchCh; ch != nil {
+		homeFetchCh = nil
+		close(ch)
+	}
+	homeFetchMu.Unlock()
 }

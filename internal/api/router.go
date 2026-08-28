@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,11 +27,10 @@ func SetupRouter(
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	// CORS middleware
+	// OPTIONS handling only: the frontend is served same-origin (embedded FS),
+	// so no cross-origin access is granted. Broadcast-wide CORS would let any
+	// website the user visits read this API and its downloaded files.
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -356,8 +354,4 @@ func SetupRouter(
 	}
 
 	return r
-}
-
-func init() {
-	_ = io.Discard
 }

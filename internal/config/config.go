@@ -17,6 +17,10 @@ type Config struct {
 	CheckIntervalMinutes  int    `json:"check_interval_minutes"`
 	DefaultFormat         string `json:"default_format"` // "raw", "pdf", "cbz", "epub"
 	Port                  int    `json:"port"`
+	// SkipTLSVerify disables certificate validation for source/image requests.
+	// Keep it false unless your network MITMs TLS (e.g. some transparent proxies);
+	// enabling it makes the app accept any certificate, including DNS-poisoned ones.
+	SkipTLSVerify bool `json:"skip_tls_verify"`
 }
 
 var (
@@ -116,7 +120,7 @@ func Update(cfg Config) error {
 		cfg.CheckIntervalMinutes = 60
 	}
 	if cfg.Port <= 0 {
-		cfg.Port = 8080
+		cfg.Port = defaultConfig.Port
 	}
 
 	currentConfig = cfg

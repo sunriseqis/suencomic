@@ -242,6 +242,7 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 	type pageResult struct {
 		page int
 		urls []string
+		err  error
 	}
 
 	resultsChan := make(chan pageResult, totalCount)
@@ -260,6 +261,7 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 
 			ashxReq, aErr := http.NewRequestWithContext(ctx, "GET", ashxURL, nil)
 			if aErr != nil {
+				resultsChan <- pageResult{page: p, err: aErr}
 				return
 			}
 			ashxReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -267,6 +269,7 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 
 			ashxResp, aErr := client.Do(ashxReq)
 			if aErr != nil {
+				resultsChan <- pageResult{page: p, err: aErr}
 				return
 			}
 			defer ashxResp.Body.Close()
@@ -274,6 +277,10 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 			ashxBytes, _ := io.ReadAll(ashxResp.Body)
 			unpacked := UnpackDeanEdwards(string(ashxBytes))
 			pageImgs := ExtractImageURLsFromJS(unpacked)
+			if len(pageImgs) == 0 {
+				resultsChan <- pageResult{page: p, err: fmt.Errorf("page %d returned no image urls", p)}
+				return
+			}
 
 			resultsChan <- pageResult{page: p, urls: pageImgs}
 		}(page)
@@ -283,7 +290,12 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 	close(resultsChan)
 
 	pageMap := make(map[int][]string)
+	failedPages := 0
 	for res := range resultsChan {
+		if res.err != nil {
+			failedPages++
+			continue
+		}
 		pageMap[res.page] = res.urls
 	}
 
@@ -302,6 +314,12 @@ func (s *MangaBZSource) GetChapterImages(ctx context.Context, mangaID string, ch
 
 	if len(allImages) == 0 {
 		return nil, fmt.Errorf("no images retrieved for MangaBZ chapter %s", chapterID)
+	}
+
+	// Never return a silently incomplete chapter: a missing middle page would
+	// otherwise produce a corrupted archive reported as 100% complete.
+	if failedPages > 0 {
+		return nil, fmt.Errorf("MangaBZ chapter %s incomplete: %d/%d pages failed to load", chapterID, failedPages, totalCount)
 	}
 
 	return allImages, nil
